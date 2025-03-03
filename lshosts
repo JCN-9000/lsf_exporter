@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Override lshosts by LSF
+
+CMD="$i{LSF_TOP}/10.1/linux2.6-glibc2.3-x86_64/bin/lshosts"
+
+$CMD $* | tr '()' '""'
+

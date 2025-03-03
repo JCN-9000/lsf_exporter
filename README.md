@@ -1,4 +1,4 @@
-# Lsf Exporter 
+# Lsf Exporter
 
 [Prometheus](https://prometheus.io/) exporter for IBM Spectrum LSF Manager
 
@@ -13,7 +13,7 @@ $ go install github.com/a270443177/lsf_exporter
 
 ```shell
 $ cd $GOPATH/src/github.com/a270443177/lsf_exporter
-$ make
+$ go build
 ```
 
 ## Configuration
@@ -29,14 +29,14 @@ Notes:
     $ source <LSF_TOP>/conf/profile.lsf
     OR
     csh:
-    $ source <LSF_TOP>/conf/cshrc.lsf 
+    $ source <LSF_TOP>/conf/cshrc.lsf
 
     ```
 
- 2. run lsf_exporter 
+ 2. run lsf_exporter
     ```
 
-    $ ./flexlm_exporter <flags>
+    $ ./lsf_exporter <flags>
 
     ```
 

@@ -175,6 +175,8 @@ func main() {
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
 	logger := promlog.New(promlogConfig)
+//		logger = level.NewFilter(logger, level.AllowDebug())
+//		logger = log.With(logger, "caller", log.DefaultCaller)
 	if *disableDefaultCollectors {
 		collector.DisableDefaultCollectors()
 	}

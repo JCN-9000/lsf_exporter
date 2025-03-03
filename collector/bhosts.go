@@ -133,15 +133,15 @@ func bhost_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bhostInfo, error)
 
 func FormatbhostsStatus(status string, logger log.Logger) float64 {
 	state := strings.ToLower(status)
-	level.Debug(logger).Log("当前获取到的值是", status, "转换后的值是", state)
-	switch {
-	case state == "ok":
+	level.Debug(logger).Log("The value currently obtained is: ", status, "The converted value is: ", state)
+	switch state {
+	case "ok":
 		return float64(1)
-	case state == "unavail":
+	case "unavail":
 		return float64(2)
-	case state == "unreach":
+	case "unreach":
 		return float64(3)
-	case state == "closed":
+	case "closed", "closed_excl", "closed_full":
 		return float64(4)
 	default:
 		return float64(0)
@@ -149,7 +149,7 @@ func FormatbhostsStatus(status string, logger log.Logger) float64 {
 }
 
 func (c *bHostsCollector) parsebHostJobCount(ch chan<- prometheus.Metric) error {
-	output, err := lsfOutput(c.logger, "bhosts", "-w")
+	output, err := lsfOutput(c.logger, "bhosts", "-w", "-X")
 	if err != nil {
 		level.Error(c.logger).Log("err: ", err)
 		return nil
