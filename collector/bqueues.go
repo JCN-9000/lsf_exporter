@@ -15,7 +15,7 @@ import (
 )
 
 type QueuesCollector struct {
-	QueuesRuningJobCount  *prometheus.Desc
+	QueuesRunningJobCount *prometheus.Desc
 	QueuesPendingJobCount *prometheus.Desc
 	QueuesMaxJobCount     *prometheus.Desc
 	queuesPriority        *prometheus.Desc
@@ -31,8 +31,8 @@ func init() {
 func NewLSFQueuesCollector(logger log.Logger) (Collector, error) {
 
 	return &QueuesCollector{
-		QueuesRuningJobCount: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "bqueues", "runingjob_count"),
+		QueuesRunningJobCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bqueues", "runningjob_count"),
 			"The total number of tasks for all running jobs in the queue. If the -alloc option is used, the total is allocated slots for the jobs in the queue.",
 			[]string{"queues_name"}, nil,
 		),
@@ -107,7 +107,8 @@ func bqueues_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bqueuesInfo, er
 
 func FormatQueusStatus(status string, logger log.Logger) float64 {
 	state := strings.ToLower(status)
-	level.Debug(logger).Log("当前获取到的值是", status, "转换后的值是", state)
+//	level.Debug(logger).Log("当前获取到的值是", status, "转换后的值是", state)
+	level.Debug(logger).Log("The current value obtained is ", status, "The converted value is ", state)
 	switch {
 	case state == "open:active":
 		return float64(1)
@@ -139,7 +140,7 @@ func (c *QueuesCollector) parseQueuesJobCount(ch chan<- prometheus.Metric) error
 		if err != nil {
 			MAXCount = -1
 		}
-		ch <- prometheus.MustNewConstMetric(c.QueuesRuningJobCount, prometheus.GaugeValue, q.RUN, q.QUEUE_NAME)
+		ch <- prometheus.MustNewConstMetric(c.QueuesRunningJobCount, prometheus.GaugeValue, q.RUN, q.QUEUE_NAME)
 		ch <- prometheus.MustNewConstMetric(c.QueuesPendingJobCount, prometheus.GaugeValue, q.PEND, q.QUEUE_NAME)
 		ch <- prometheus.MustNewConstMetric(c.QueuesMaxJobCount, prometheus.GaugeValue, MAXCount, q.QUEUE_NAME)
 		ch <- prometheus.MustNewConstMetric(c.queuesPriority, prometheus.GaugeValue, q.PRIO, q.QUEUE_NAME)

@@ -1,4 +1,4 @@
-module github.com/a270443177/lsf_exporter
+module lsf_exporter
 
 go 1.20
 

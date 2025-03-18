@@ -26,7 +26,8 @@ import (
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 
-	"github.com/a270443177/lsf_exporter/collector"
+//	"github.com/a270443177/lsf_exporter/collector"
+	"lsf_exporter/collector"
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"

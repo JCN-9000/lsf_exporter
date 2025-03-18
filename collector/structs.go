@@ -86,3 +86,25 @@ type lshostsInfo struct {
 	Server    string `csv:"server"`
 	RESOURCES string `csv:"RESOURCES"`
 }
+
+type bjobsInfo struct {
+	JOBID  string `json:"JOBID"`
+	USER   string  `json:"USER"`
+	STATUS string  `json:"STATUS"`
+  QUEUE  string  `json:"QUEUE"`
+	FROM_HOST string `json:"FROM_HOST"`
+	EXEC_HOST string `json:"EXEC_HOST"`
+	JOB_NAME  string `json:"JOB_NAME"`
+	SUBMIT_TIME string `json:"SUBMIT_TIME"`
+}
+
+type csv_bjobsInfo struct {
+	JOBID  float64 `csv:"JOBID"`
+	USER   string  `csv:"USER"`
+	STATUS string  `csv:"STATUS"`
+  QUEUE  string  `csv:"QUEUE"`
+	FROM_HOST string `csv:"FROM_HOST"`
+	EXEC_HOST string `csv:"EXEC_HOST"`
+	JOB_NAME  string `csv:"JOB_NAME"`
+	SUBMIT_TIME float64 `csv:"SUBMIT_TIME"`
+}

@@ -102,8 +102,11 @@ func lsload_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]lsloadInfo, erro
 		if err := dec.Decode(&u); err == io.EOF {
 			break
 		} else if err != nil {
+			recinfo := dec.Record()[0] + " " + dec.Record()[1]
+			level.Error(logger).Log("rec=", recinfo)
 			level.Error(logger).Log("err=", err)
-			return nil, nil
+			if dec.Record()[1] == "unavail" { continue }
+//			return nil, nil
 		}
 
 		lsloadInfos = append(lsloadInfos, u)

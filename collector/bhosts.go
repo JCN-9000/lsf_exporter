@@ -15,8 +15,8 @@ import (
 )
 
 type bHostsCollector struct {
-	HostRuningJobCount *prometheus.Desc
-	HostNJobsCount     *prometheus.Desc
+	HostRunningJobCount *prometheus.Desc
+	HostNJobsCount      *prometheus.Desc
 
 	HostMaxJobCount   *prometheus.Desc
 	HostSSUSPJobCount *prometheus.Desc
@@ -33,8 +33,8 @@ func init() {
 func NewLSFbHostCollector(logger log.Logger) (Collector, error) {
 
 	return &bHostsCollector{
-		HostRuningJobCount: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "bhost", "runingjob_count"),
+		HostRunningJobCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bhost", "runningjob_count"),
 			"The number of tasks for all running jobs on the host.",
 			[]string{"host_name"}, nil,
 		),
@@ -162,7 +162,7 @@ func (c *bHostsCollector) parsebHostJobCount(ch chan<- prometheus.Metric) error 
 
 	for _, bhost := range bhosts {
 		ch <- prometheus.MustNewConstMetric(c.HostNJobsCount, prometheus.GaugeValue, bhost.NJOBS, bhost.HOST_NAME)
-		ch <- prometheus.MustNewConstMetric(c.HostRuningJobCount, prometheus.GaugeValue, bhost.RUN, bhost.HOST_NAME)
+		ch <- prometheus.MustNewConstMetric(c.HostRunningJobCount, prometheus.GaugeValue, bhost.RUN, bhost.HOST_NAME)
 		ch <- prometheus.MustNewConstMetric(c.HostMaxJobCount, prometheus.GaugeValue, bhost.MAX, bhost.HOST_NAME)
 		ch <- prometheus.MustNewConstMetric(c.HostSSUSPJobCount, prometheus.GaugeValue, bhost.SSUSP, bhost.HOST_NAME)
 		ch <- prometheus.MustNewConstMetric(c.HostUSUSPJobCount, prometheus.GaugeValue, bhost.USUSP, bhost.HOST_NAME)
