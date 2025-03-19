@@ -2,9 +2,10 @@ package collector
 
 import (
 	"fmt"
-	"time"
+//	"time"
 	"io"
 	"bytes"
+	"strconv"
 	"encoding/csv"
 	"encoding/json"
 
@@ -22,11 +23,27 @@ type Job struct {
 	FromHost      string
 	ExecutionHost string
 	JobName       string
-	SubmitTime    int64
+	SubmitTime    string
+	UserGroup     string
+	Project       string
+	Application   string
+	JGroup        string
+	Dependency    string
+	NSlot         string
+  NProc         string
+  StartTime     string
+  SubCWD        string
+	PendTime      string
+	SrcJobid      string
+  DstJobid      string
+  SrcCluster    string
+  DstCluster    string
 }
 
 type JobCollector struct {
-	JobInfo *prometheus.Desc
+	JobInfoNCpuCount *prometheus.Desc
+  JobInfoPendingTime *prometheus.Desc
+//	JobInfo *prometheus.Desc
 	logger  log.Logger
 }
 
@@ -35,15 +52,30 @@ func init() {
   fmt.Printf("%+s", "Init lsdjobs Called")
 }
 
-// NewLmstatCollector returns a new Collector exposing lmstat license stats.
+// NewLSFJobCollector returns a new Collector exposing job info
 func NewLSFJobCollector(logger log.Logger) (Collector, error) {
 
 	return &JobCollector{
-		JobInfo: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "bjobs", "status"),
-			"bjobs status labeled by id, user, status, queue and FromHost of the starttime.",
-			[]string{"ID", "User", "Status", "Queue", "FromHost", "ExecutionHost", "JobName"}, nil,
+		JobInfoNCpuCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bjobs", "ncpu_count"),
+			"bjobs ncpu labeled by id, user, status, queue and FromHost of the starttime.",
+			[]string{"ID", "User", "Status", "Queue", "FromHost", "ExecutionHost", "JobName",
+		  "UserGroup", "Project", "Application", "JGroup", "Dependency", "NSlot", "NProc",
+		  "StartTime", "SubCWD", "PendTime", "SrcJobid", "DstJobid", "SrcCluster", "DstCluster",
+			"SubmitTime",
+		}, nil,
 		),
+
+		JobInfoPendingTime: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bjobs", "pending_time_total"),
+			"Job pending time since submission (sec)",
+			[]string{"ID", "User", "Status", "Queue", "FromHost", "ExecutionHost", "JobName",
+		  "UserGroup", "Project", "Application", "JGroup", "Dependency", "NSlot", "NProc",
+		  "StartTime", "SubCWD", "PendTime", "SrcJobid", "DstJobid", "SrcCluster", "DstCluster",
+			"SubmitTime",
+		}, nil,
+		),
+
 		logger: logger,
 	}, nil
 }
@@ -52,29 +84,50 @@ func NewLSFJobCollector(logger log.Logger) (Collector, error) {
 // memory metrics.
 func (c *JobCollector) Update(ch chan<- prometheus.Metric) error {
 
-  fmt.Printf("%+s\n", "Update Called")
+  //fmt.Printf("%+s\n", "Update Called")
 	err := c.getJobStatus(ch)
 	if err != nil {
-		return fmt.Errorf("couldn't get queues infomation: %w", err)
+		return fmt.Errorf("couldn't get job infomation: %w", err)
 	}
 
 	return nil
 }
 
-func parseJJobStatus() Job {
-	now := time.Now().Unix()
+func parseJobStatus( jobJson bjobsInfo ) Job {
+	//now := time.Now().Unix()
 	//level.Info(logger).Log("Parsing Job")
-	return Job{
-		ID:            "1",
-		User:          "t01",
-		Status:        "RUN",
-		Queue:         "normal",
-		FromHost:      "master01",
-		ExecutionHost: "master01",
-		JobName:       "sleep 10",
-		SubmitTime:    now,
-	}
 
+	//fmt.Printf("%s %+v\n", "SubmitTime:", jobJson.SUBMIT_TIME)
+	//ts, err := time.Parse("Jan _2 15:04", jobJson.SUBMIT_TIME)
+	//if err != nil {
+	//	fmt.Printf("Error Decoding Time: %s\n", err)
+  //}
+	//ts = ts.AddDate(time.Now().Year(), 0, 0)
+
+	return Job{
+		ID:            jobJson.JOBID,
+		User:          jobJson.USER,
+		Status:        jobJson.STATUS,
+		Queue:         jobJson.QUEUE,
+		FromHost:      jobJson.FROM_HOST,
+		ExecutionHost: jobJson.EXEC_HOST,
+		JobName:       jobJson.JOB_NAME,
+		UserGroup:     jobJson.UGROUP,
+		Project:       jobJson.PROJECT,
+		Application:   jobJson.APPLICATION,
+		JGroup:        jobJson.JOB_GROUP,
+		Dependency:    jobJson.DEPENDENCY,
+	  NSlot:         jobJson.NALLOC_SLOT,
+    NProc:         jobJson.MIN_REQ_PROC,
+    StartTime:     jobJson.START_TIME,
+    SubCWD:        jobJson.SUB_CWD,
+		PendTime:      jobJson.PEND_TIME,
+		SrcJobid:      jobJson.SRCJOBID,
+    DstJobid:      jobJson.DSTJOBID,
+    SrcCluster:    jobJson.SRCCLUSTER,
+    DstCluster:    jobJson.DSTCLUSTER,
+		SubmitTime:    jobJson.SUBMIT_TIME,   //int64(ts.Unix()),
+	}
 }
 
 type lsf_answer struct {
@@ -131,10 +184,8 @@ func bjobs_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bjobsInfo, error)
 
 func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
   //output, err := lsfOutput(c.logger, "bjobs", "-w", "-u", "all")
-	output, err := lsfOutput(c.logger, "bjobs", "-u", "all", "-o", "JOBID USER STAT SUBMIT_TIME", "-json")
-	//output, err := lsfOutput(c.logger, "bjobs", "-u all -o 'JOBID USER STAT QUEUE EXEC_HOST NALLOC_SLOT MIN_REQ_PROC JOB_NAME SUBMIT_TIME START_TIME SUB_CWD' -json ")
-	//output, err := lsfOutput(c.logger, "bjobs", "-u", "all", "-o", "'JOBID", "USER", "STAT", "QUEUE", "EXEC_HOST", "NALLOC_SLOT", "MIN_REQ_PROC", "JOB_NAME", "SUBMIT_TIME", "START_TIME", "SUB_CWD'", "-json")
-	//output, err := lsfOutput(c.logger, "bjobs", "-u", "all", "-o", "'JOBID USER STAT QUEUE EXEC_HOST NALLOC_SLOT MIN_REQ_PROC JOB_NAME SUBMIT_TIME START_TIME SUB_CWD'", "-json")
+	output, err := lsfOutput(c.logger, "bjobs", "-X", "-u", "all", "-o",
+	"JOBID USER STAT QUEUE FROM_HOST EXEC_HOST JOB_NAME SUBMIT_TIME UGROUP PROJECT APPLICATION JOB_GROUP DEPENDENCY NALLOC_SLOT MIN_REQ_PROC START_TIME SUB_CWD PEND_TIME SRCJOBID DSTJOBID SRCLUSTER FWD_CLUSTER", "-json")
   if err != nil {
     level.Error(c.logger).Log("err=", err, output)
     return nil
@@ -148,11 +199,67 @@ func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
     level.Error(c.logger).Log("err=", err)
     return nil
   }
-  fmt.Printf("%+v\n", jobs)
-  fmt.Printf("%+v\n", len(jobs))
+  //fmt.Printf("%+v\n", jobs)
+  //fmt.Printf("%+v\n", len(jobs))
 
-	parseJobStatus := parseJJobStatus()
-	ch <- prometheus.MustNewConstMetric(c.JobInfo, prometheus.GaugeValue, float64(parseJobStatus.SubmitTime), parseJobStatus.ID, parseJobStatus.User, parseJobStatus.Status, parseJobStatus.Queue, parseJobStatus.FromHost, parseJobStatus.ExecutionHost, parseJobStatus.JobName)
+	for _, j := range jobs {
+
+		jobStatus := parseJobStatus(j)
+		fmt.Printf("%s %+v\n", "jobStatus:", jobStatus)
+		nCPU, _ := strconv.ParseFloat(jobStatus.NProc, 64)
+		// parameter order must follow declaration order of Labels (see top)
+		ch <- prometheus.MustNewConstMetric(c.JobInfoNCpuCount, prometheus.GaugeValue, nCPU,
+		  jobStatus.ID,
+			jobStatus.User,
+			jobStatus.Status,
+			jobStatus.Queue,
+			jobStatus.FromHost,
+			jobStatus.ExecutionHost,
+			jobStatus.JobName,
+			jobStatus.UserGroup,
+			jobStatus.Project,
+			jobStatus.Application,
+			jobStatus.JGroup,
+			jobStatus.Dependency,
+			jobStatus.NSlot,
+			jobStatus.NProc,
+			jobStatus.StartTime,
+			jobStatus.SubCWD,
+      jobStatus.PendTime,
+			jobStatus.SrcJobid,
+      jobStatus.DstJobid,
+      jobStatus.SrcCluster,
+      jobStatus.DstCluster,
+			jobStatus.SubmitTime,
+		)
+		pTime, _ := strconv.ParseFloat(jobStatus.PendTime, 64)
+		ch <- prometheus.MustNewConstMetric(c.JobInfoPendingTime, prometheus.CounterValue, pTime,
+		  jobStatus.ID,
+			jobStatus.User,
+			jobStatus.Status,
+			jobStatus.Queue,
+			jobStatus.FromHost,
+			jobStatus.ExecutionHost,
+			jobStatus.JobName,
+			jobStatus.UserGroup,
+			jobStatus.Project,
+			jobStatus.Application,
+			jobStatus.JGroup,
+			jobStatus.Dependency,
+			jobStatus.NSlot,
+			jobStatus.NProc,
+			jobStatus.StartTime,
+			jobStatus.SubCWD,
+      jobStatus.PendTime,
+			jobStatus.SrcJobid,
+      jobStatus.DstJobid,
+      jobStatus.SrcCluster,
+      jobStatus.DstCluster,
+			jobStatus.SubmitTime,
+		)
+
+		}
+
 	return nil
 
 }

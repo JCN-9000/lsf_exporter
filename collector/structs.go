@@ -88,14 +88,28 @@ type lshostsInfo struct {
 }
 
 type bjobsInfo struct {
-	JOBID  string `json:"JOBID"`
-	USER   string  `json:"USER"`
-	STATUS string  `json:"STATUS"`
-  QUEUE  string  `json:"QUEUE"`
-	FROM_HOST string `json:"FROM_HOST"`
-	EXEC_HOST string `json:"EXEC_HOST"`
-	JOB_NAME  string `json:"JOB_NAME"`
+	JOBID       string `json:"JOBID"`
+	USER        string `json:"USER"`
+	STATUS      string `json:"STAT"`
+  QUEUE       string `json:"QUEUE"`
+	FROM_HOST   string `json:"FROM_HOST"`
+	EXEC_HOST   string `json:"EXEC_HOST"`
+	JOB_NAME    string `json:"JOB_NAME"`
 	SUBMIT_TIME string `json:"SUBMIT_TIME"`
+	UGROUP      string `json:"UGROUP"`
+	PROJECT     string `json:"PROJ_NAME"`
+	APPLICATION string `json:"APPLICATION"`
+	JOB_GROUP   string `json:"JOB_GROUP"`
+	DEPENDENCY  string `json:"DEPENDENCY"`
+	NALLOC_SLOT string `json:"NALLOC_SLOT"`
+	MIN_REQ_PROC string `json:"MIN_REQ_PROC"`
+	START_TIME  string `json:"START_TIME"`
+	SUB_CWD     string `json:"SUB_CWD"`
+	PEND_TIME   string `json:"PEND_TIME"`
+	SRCJOBID    string `json:"SRCJOBID"`
+	DSTJOBID    string `json:"DSTJOBID"`
+	SRCCLUSTER  string `json:"SOURCE_CLUSTER"`
+	DSTCLUSTER  string `json:"FORWARD_CLUSTER"`
 }
 
 type csv_bjobsInfo struct {

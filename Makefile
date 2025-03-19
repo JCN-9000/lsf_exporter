@@ -1,5 +1,8 @@
 
 
+debug: lsf_exporter
+	scp lsf_exporter collector-it-aws01:
+
 deploy: lsf_exporter
 	ssh -n ec2-user@collector-fr-aws01 sudo -n systemctl stop  lsf_exporter.service
 	scp lsf_exporter collector-fr-aws01:/opt/exporters
@@ -8,6 +11,6 @@ deploy: lsf_exporter
 	scp lsf_exporter collector-it-aws01:/opt/exporters
 	ssh -n ec2-user@collector-it-aws01 sudo -n systemctl start lsf_exporter.service
 
-lsf_exporter: lsf_exporter.go
+lsf_exporter: lsf_exporter.go collector/*go
 	go build
 
