@@ -106,6 +106,8 @@ type bjobsInfo struct {
 	START_TIME  string `json:"START_TIME"`
 	SUB_CWD     string `json:"SUB_CWD"`
 	PEND_TIME   string `json:"PEND_TIME"`
+	EPENDTIME   string `json:"EPENDTIME"`
+	IPENDTIME   string `json:"IPENDTIME"`
 	SRCJOBID    string `json:"SRCJOBID"`
 	DSTJOBID    string `json:"DSTJOBID"`
 	SRCCLUSTER  string `json:"SOURCE_CLUSTER"`

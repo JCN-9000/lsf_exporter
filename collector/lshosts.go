@@ -42,7 +42,7 @@ func NewLSFlshostCollector(logger log.Logger) (Collector, error) {
             []string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
         ),
         HostNCpus: prometheus.NewDesc(
-            prometheus.BuildFQName(namespace, "lshosts", "ncpus"),
+            prometheus.BuildFQName(namespace, "lshosts", "ncpus_count"),
             "The number of processors on this host. If the LSF_ENABLE_DUALCORE=Y parameter is specified in the lsf.conf file for multi-core CPU hosts, displays the number of cores instead of physical CPUs.",
             []string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
         ),

@@ -34,6 +34,8 @@ type Job struct {
   StartTime     string
   SubCWD        string
 	PendTime      string
+	EPendTime     string
+	IPendTime     string
 	SrcJobid      string
   DstJobid      string
   SrcCluster    string
@@ -43,6 +45,8 @@ type Job struct {
 type JobCollector struct {
 	JobInfoNCpuCount *prometheus.Desc
   JobInfoPendingTime *prometheus.Desc
+  JobInfoEPendingTime *prometheus.Desc
+  JobInfoIPendingTime *prometheus.Desc
 //	JobInfo *prometheus.Desc
 	logger  log.Logger
 }
@@ -55,25 +59,60 @@ func init() {
 // NewLSFJobCollector returns a new Collector exposing job info
 func NewLSFJobCollector(logger log.Logger) (Collector, error) {
 
+	labelsName := []string{
+		  "ID",
+			"User",
+			"Status",
+			"Queue",
+			"FromHost",
+			"ExecutionHost",
+			"JobName",
+      "UserGroup",
+			"Project",
+			"Application",
+			"JGroup",
+			"Dependency",
+			"NSlot",
+			"NProc",
+      "StartTime",
+			"SubCWD",
+			"PendTime",
+			"EPendTime",
+			"IPendTime",
+			"SrcJobid",
+			"DstJobid",
+			"SrcCluster",
+			"DstCluster",
+      "SubmitTime",
+      }
+
 	return &JobCollector{
 		JobInfoNCpuCount: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "bjobs", "ncpu_count"),
 			"bjobs ncpu labeled by id, user, status, queue and FromHost of the starttime.",
-			[]string{"ID", "User", "Status", "Queue", "FromHost", "ExecutionHost", "JobName",
-		  "UserGroup", "Project", "Application", "JGroup", "Dependency", "NSlot", "NProc",
-		  "StartTime", "SubCWD", "PendTime", "SrcJobid", "DstJobid", "SrcCluster", "DstCluster",
-			"SubmitTime",
-		}, nil,
+			labelsName,
+		  nil,
 		),
 
 		JobInfoPendingTime: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "bjobs", "pending_time_total"),
 			"Job pending time since submission (sec)",
-			[]string{"ID", "User", "Status", "Queue", "FromHost", "ExecutionHost", "JobName",
-		  "UserGroup", "Project", "Application", "JGroup", "Dependency", "NSlot", "NProc",
-		  "StartTime", "SubCWD", "PendTime", "SrcJobid", "DstJobid", "SrcCluster", "DstCluster",
-			"SubmitTime",
-		}, nil,
+			labelsName,
+		  nil,
+		),
+
+		JobInfoEPendingTime: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bjobs", "pending_time_eligible_total"),
+			"Job eligible pending time since submission (sec)",
+			labelsName,
+		  nil,
+		),
+
+		JobInfoIPendingTime: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "bjobs", "pending_time_ineligible_total"),
+			"Job ineligible pending time since submission (sec)",
+			labelsName,
+		  nil,
 		),
 
 		logger: logger,
@@ -122,6 +161,8 @@ func parseJobStatus( jobJson bjobsInfo ) Job {
     StartTime:     jobJson.START_TIME,
     SubCWD:        jobJson.SUB_CWD,
 		PendTime:      jobJson.PEND_TIME,
+		EPendTime:     jobJson.EPENDTIME,
+		IPendTime:     jobJson.IPENDTIME,
 		SrcJobid:      jobJson.SRCJOBID,
     DstJobid:      jobJson.DSTJOBID,
     SrcCluster:    jobJson.SRCCLUSTER,
@@ -185,7 +226,7 @@ func bjobs_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bjobsInfo, error)
 func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
   //output, err := lsfOutput(c.logger, "bjobs", "-w", "-u", "all")
 	output, err := lsfOutput(c.logger, "bjobs", "-X", "-u", "all", "-o",
-	"JOBID USER STAT QUEUE FROM_HOST EXEC_HOST JOB_NAME SUBMIT_TIME UGROUP PROJECT APPLICATION JOB_GROUP DEPENDENCY NALLOC_SLOT MIN_REQ_PROC START_TIME SUB_CWD PEND_TIME SRCJOBID DSTJOBID SRCLUSTER FWD_CLUSTER", "-json")
+	"JOBID USER STAT QUEUE FROM_HOST EXEC_HOST JOB_NAME SUBMIT_TIME UGROUP PROJECT APPLICATION JOB_GROUP DEPENDENCY NALLOC_SLOT MIN_REQ_PROC START_TIME SUB_CWD PEND_TIME EPENDTIME IPENDTIME SRCJOBID DSTJOBID SRCLUSTER FWD_CLUSTER", "-json")
   if err != nil {
     level.Error(c.logger).Log("err=", err, output)
     return nil
@@ -202,60 +243,57 @@ func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
   //fmt.Printf("%+v\n", jobs)
   //fmt.Printf("%+v\n", len(jobs))
 
+
 	for _, j := range jobs {
 
 		jobStatus := parseJobStatus(j)
-		fmt.Printf("%s %+v\n", "jobStatus:", jobStatus)
+	  labelsValue := []string{
+		  jobStatus.ID,
+			jobStatus.User,
+			jobStatus.Status,
+			jobStatus.Queue,
+			jobStatus.FromHost,
+			jobStatus.ExecutionHost,
+			jobStatus.JobName,
+			jobStatus.UserGroup,
+			jobStatus.Project,
+			jobStatus.Application,
+			jobStatus.JGroup,
+			jobStatus.Dependency,
+			jobStatus.NSlot,
+			jobStatus.NProc,
+			jobStatus.StartTime,
+			jobStatus.SubCWD,
+      jobStatus.PendTime,
+      jobStatus.EPendTime,
+      jobStatus.IPendTime,
+			jobStatus.SrcJobid,
+      jobStatus.DstJobid,
+      jobStatus.SrcCluster,
+      jobStatus.DstCluster,
+			jobStatus.SubmitTime,
+	  }
+
+		//fmt.Printf("%s %+v\n", "jobStatus:", jobStatus)
 		nCPU, _ := strconv.ParseFloat(jobStatus.NProc, 64)
 		// parameter order must follow declaration order of Labels (see top)
 		ch <- prometheus.MustNewConstMetric(c.JobInfoNCpuCount, prometheus.GaugeValue, nCPU,
-		  jobStatus.ID,
-			jobStatus.User,
-			jobStatus.Status,
-			jobStatus.Queue,
-			jobStatus.FromHost,
-			jobStatus.ExecutionHost,
-			jobStatus.JobName,
-			jobStatus.UserGroup,
-			jobStatus.Project,
-			jobStatus.Application,
-			jobStatus.JGroup,
-			jobStatus.Dependency,
-			jobStatus.NSlot,
-			jobStatus.NProc,
-			jobStatus.StartTime,
-			jobStatus.SubCWD,
-      jobStatus.PendTime,
-			jobStatus.SrcJobid,
-      jobStatus.DstJobid,
-      jobStatus.SrcCluster,
-      jobStatus.DstCluster,
-			jobStatus.SubmitTime,
+		  labelsValue...,
 		)
+
 		pTime, _ := strconv.ParseFloat(jobStatus.PendTime, 64)
 		ch <- prometheus.MustNewConstMetric(c.JobInfoPendingTime, prometheus.CounterValue, pTime,
-		  jobStatus.ID,
-			jobStatus.User,
-			jobStatus.Status,
-			jobStatus.Queue,
-			jobStatus.FromHost,
-			jobStatus.ExecutionHost,
-			jobStatus.JobName,
-			jobStatus.UserGroup,
-			jobStatus.Project,
-			jobStatus.Application,
-			jobStatus.JGroup,
-			jobStatus.Dependency,
-			jobStatus.NSlot,
-			jobStatus.NProc,
-			jobStatus.StartTime,
-			jobStatus.SubCWD,
-      jobStatus.PendTime,
-			jobStatus.SrcJobid,
-      jobStatus.DstJobid,
-      jobStatus.SrcCluster,
-      jobStatus.DstCluster,
-			jobStatus.SubmitTime,
+		  labelsValue...,
+		)
+
+		epTime, _ := strconv.ParseFloat(jobStatus.EPendTime, 64)
+		ch <- prometheus.MustNewConstMetric(c.JobInfoEPendingTime, prometheus.CounterValue, epTime,
+		  labelsValue...,
+		)
+
+		ipTime, _ := strconv.ParseFloat(jobStatus.IPendTime, 64)
+		ch <- prometheus.MustNewConstMetric(c.JobInfoIPendingTime, prometheus.CounterValue, ipTime,
+		  labelsValue...,
 		)
 
 		}
