@@ -137,11 +137,11 @@ func FormatbhostsStatus(status string, logger log.Logger) float64 {
 	switch state {
 	case "ok":
 		return float64(1)
-	case "unavail":
+	case "unavail", "closed_adm":
 		return float64(2)
 	case "unreach":
 		return float64(3)
-	case "closed", "closed_excl", "closed_full":
+	case "closed", "closed_excl", "closed_full" :
 		return float64(4)
 	default:
 		return float64(0)
