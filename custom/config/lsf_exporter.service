@@ -1,0 +1,16 @@
+# /etc/systemd/system/lsf_exporter.service
+[Unit]
+Description=LSF Prometheus exporter
+Documentation=https://github.com/JCN-9000/lsf_exporter/tree/main
+After=network-online.target
+
+[Service]
+User=stlarepo
+Group=stlarepo
+Restart=on-failure
+EnvironmentFile=-/etc/default/lsf_exporter.env
+ExecStart=/usr/local/bin/lsf_exporter
+
+[Install]
+WantedBy=multi-user.target
+

@@ -148,7 +148,8 @@ func ConvertresourceType(resource_type string) string {
 }
 
 func (c *lshostsCollector) parselshostsCount(ch chan<- prometheus.Metric) error {
-    output, err := lsfOutput(c.logger, "lshosts", "-w")
+//    output, err := lsfOutput(c.logger, "lshosts", "-w")
+    output, err := lsfOutput(c.logger, "lshosts", "-o", "HOST_NAME type model cpuf ncpus maxmem maxswp  server nprocs ncores nthreads RESOURCES" )
     if err != nil {
         level.Error(c.logger).Log("err: ", err)
         return nil
@@ -161,10 +162,19 @@ func (c *lshostsCollector) parselshostsCount(ch chan<- prometheus.Metric) error 
 
     for _, lshost := range lshosts {
 
-        Ncpus, err := strconv.ParseFloat(lshost.Ncpus, 64)
-        if err != nil {
-            Ncpus = -1
-        }
+        Nprocs, err := strconv.ParseFloat(lshost.Nprocs, 64)
+				if err != nil {
+					Nprocs = -1
+				}
+				Ncores, err := strconv.ParseFloat(lshost.Ncores, 64)
+				if err != nil {
+					Ncores = -1
+				}
+				Nthreads, err := strconv.ParseFloat(lshost.Nthreads, 64)
+				if err != nil {
+					Nthreads = -1
+				}
+				Ncpus := Nprocs * Ncores * Nthreads
 
         Cpuf, err := strconv.ParseFloat(lshost.Cpuf, 64)
         if err != nil {

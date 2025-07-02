@@ -48,4 +48,5 @@ Metrics will now be reachable at http://localhost:9818/metrics.
  * `lsid` information.
  * `bhosts -w` bhosts information.
  * `bqueues -w`  bqueues information.
+ * `bjobs -w` bjobs information - Now using JSON format
 

@@ -84,6 +84,9 @@ type lshostsInfo struct {
 	Maxmem    string `csv:"maxmem"`
 	Maxswp    string `csv:"maxswp"`
 	Server    string `csv:"server"`
+	Nprocs    string `csv:"nprocs"`
+	Ncores    string `csv:"ncores"`
+	Nthreads  string `csv:"nthreads"`
 	RESOURCES string `csv:"RESOURCES"`
 }
 

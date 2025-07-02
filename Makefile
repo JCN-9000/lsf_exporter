@@ -1,24 +1,14 @@
 
 
-debug: lsf_exporter
-	scp -p lsf_exporter collector-it-aws01:
+debug: lsf_exporter lshosts
+	rsync -ia $? collector-it-aws01:Tools
 
-deploy: lsf_exporter
-	ssh -n ec2-user@collector-fr-aws01 sudo -n systemctl stop  lsf_exporter.service
-	scp -p lsf_exporter collector-fr-aws01:/opt/exporters
-	ssh -n ec2-user@collector-fr-aws01 sudo -n systemctl start lsf_exporter.service
-
-	ssh -n ec2-user@collector-it-aws01 sudo -n systemctl stop  lsf_exporter.service
-	scp -p lsf_exporter collector-it-aws01:/opt/exporters
-	ssh -n ec2-user@collector-it-aws01 sudo -n systemctl start lsf_exporter.service
-
-	ssh -n ec2-user@collector-fr-aws02 sudo -n systemctl stop  lsf_exporter.service
-	scp -p lsf_exporter collector-fr-aws02:/usr/local/bin/lsf_exporter
-	ssh -n ec2-user@collector-fr-aws02 sudo -n systemctl start lsf_exporter.service
-
-	ssh -n ec2-user@collector-it-aws02 sudo -n systemctl stop  lsf_exporter.service
-	scp -p lsf_exporter collector-it-aws02:/usr/local/bin/lsf_exporter
-	ssh -n ec2-user@collector-it-aws02 sudo -n systemctl start lsf_exporter.service
+deploy: lsf_exporter lshosts
+	rsync -ia $? collector-it-aws02:Tools
+	rsync -ia $? collector-fr-aws02:Tools
+	echo "Now run stop/start for the systemd services"
+	echo "sudo cp lshosts /usr/local/bin"
+	echo "sudo systemctl stop lsf_exporter.service && sudo cp lsf_exporter /usr/local/bin && sudo systemctl start lsf_exporter && systemctl status lsf_exporter.service"
 
 lsf_exporter: lsf_exporter.go collector/*go
 	go build
