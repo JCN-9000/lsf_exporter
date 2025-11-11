@@ -7,11 +7,12 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"log/slog"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/jszwec/csvutil"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"lsf_exporter/config"
 )
 
 type lsLoadCollector struct {
@@ -21,7 +22,7 @@ type lsLoadCollector struct {
 	LsLoadut         *prometheus.Desc
 	LsLoadls         *prometheus.Desc
 	LsLoadHostStatus *prometheus.Desc
-	logger           log.Logger
+	logger           *slog.Logger
 }
 
 func init() {
@@ -29,7 +30,7 @@ func init() {
 }
 
 // NewLmstatCollector returns a new Collector exposing lmstat license stats.
-func NewLSFlsLoadCollector(logger log.Logger) (Collector, error) {
+func NewLSFlsLoadCollector(logger *slog.Logger, config *config.Configuration) (Collector, error) {
 
 	return &lsLoadCollector{
 		LsLoadR15s: prometheus.NewDesc(
@@ -83,7 +84,7 @@ func (c *lsLoadCollector) Update(ch chan<- prometheus.Metric) error {
 	return nil
 }
 
-func lsload_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]lsloadInfo, error) {
+func lsload_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]lsloadInfo, error) {
 	csv_out := csv.NewReader(TrimReader{bytes.NewReader(lsfOutput)})
 	csv_out.LazyQuotes = true
 	csv_out.Comma = ' '
@@ -91,7 +92,7 @@ func lsload_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]lsloadInfo, erro
 
 	dec, err := csvutil.NewDecoder(csv_out)
 	if err != nil {
-		level.Error(logger).Log("err=", err)
+		logger.Error("err=", "err", err)
 		return nil, nil
 	}
 
@@ -103,8 +104,8 @@ func lsload_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]lsloadInfo, erro
 			break
 		} else if err != nil {
 			recinfo := dec.Record()[0] + " " + dec.Record()[1]
-			level.Error(logger).Log("rec=", recinfo)
-			level.Error(logger).Log("err=", err)
+			logger.Error("rec=", "recinfo", recinfo)
+			logger.Error("err=", "err", err)
 			if dec.Record()[1] == "unavail" { continue }
 //			return nil, nil
 		}
@@ -115,9 +116,9 @@ func lsload_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]lsloadInfo, erro
 
 }
 
-func FormatlsLoadStatus(status string, logger log.Logger) float64 {
+func FormatlsLoadStatus(status string, logger *slog.Logger) float64 {
 	state := strings.ToLower(status)
-	level.Debug(logger).Log("当前获取到的值是", status, "转换后的值是", state)
+	logger.Debug("The current value obtained is ", "status", status, "The converted value is ", "state", state)
 	switch {
 	case state == "ok":
 		return float64(1)
@@ -136,12 +137,12 @@ func FormatlsLoadStatus(status string, logger log.Logger) float64 {
 	}
 }
 
-func ConvertUT(data string, logger log.Logger) float64 {
+func ConvertUT(data string, logger *slog.Logger) float64 {
 	data_new := strings.ReplaceAll(data, "%", "")
 
 	fl, err := strconv.ParseFloat(data_new, 64)
 	if err != nil {
-		level.Error(logger).Log("err: ", err)
+		logger.Error("err: ", "err", err)
 		return -1
 	}
 	return fl
@@ -150,12 +151,12 @@ func ConvertUT(data string, logger log.Logger) float64 {
 func (c *lsLoadCollector) parselsLoad(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "lsload", "-w")
 	if err != nil {
-		level.Error(c.logger).Log("err: ", err)
+		c.logger.Error("err: ", "err", err)
 		return nil
 	}
 	lsloads, err := lsload_CsvtoStruct(output, c.logger)
 	if err != nil {
-		level.Error(c.logger).Log("err: ", err)
+		c.logger.Error("err: ", "err", err)
 		return nil
 	}
 

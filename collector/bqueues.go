@@ -7,11 +7,12 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"log/slog"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/jszwec/csvutil"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"lsf_exporter/config"
 )
 
 type QueuesCollector struct {
@@ -20,7 +21,7 @@ type QueuesCollector struct {
 	QueuesMaxJobCount     *prometheus.Desc
 	queuesPriority        *prometheus.Desc
 	QueuesStatus          *prometheus.Desc
-	logger                log.Logger
+	logger                *slog.Logger
 }
 
 func init() {
@@ -28,7 +29,7 @@ func init() {
 }
 
 // NewLmstatCollector returns a new Collector exposing lmstat license stats.
-func NewLSFQueuesCollector(logger log.Logger) (Collector, error) {
+func NewLSFQueuesCollector(logger *slog.Logger, config *config.Configuration) (Collector, error) {
 
 	return &QueuesCollector{
 		QueuesRunningJobCount: prometheus.NewDesc(
@@ -43,7 +44,7 @@ func NewLSFQueuesCollector(logger log.Logger) (Collector, error) {
 		),
 		QueuesStatus: prometheus.NewDesc(
 			prometheus.BuildFQName(namespace, "bqueues", "status"),
-			"The status of the queue. The following values are supported:	1-Open:Active、 2-Open:Inact_Win、 3-Closed:Active 4、Closed:Inact_Win	0-UnKnow	",
+			"The status of the queue. The following values are supported:	1-Open:Active	 2-Open:Inact_Win	 3-Closed:Active 4	Closed:Inact_Win	0-UnKnow	",
 			[]string{"queues_name"}, nil,
 		),
 		queuesPriority: prometheus.NewDesc(
@@ -76,7 +77,7 @@ func (c *QueuesCollector) Update(ch chan<- prometheus.Metric) error {
 	return nil
 }
 
-func bqueues_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bqueuesInfo, error) {
+func bqueues_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bqueuesInfo, error) {
 	csv_out := csv.NewReader(TrimReader{bytes.NewReader(lsfOutput)})
 	csv_out.LazyQuotes = true
 	csv_out.Comma = ' '
@@ -84,7 +85,7 @@ func bqueues_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bqueuesInfo, er
 
 	dec, err := csvutil.NewDecoder(csv_out)
 	if err != nil {
-		level.Error(logger).Log("err=", err)
+		logger.Error("err=", "err", err)
 		return nil, nil
 	}
 
@@ -95,7 +96,7 @@ func bqueues_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bqueuesInfo, er
 		if err := dec.Decode(&u); err == io.EOF {
 			break
 		} else if err != nil {
-			level.Error(logger).Log("err=", err)
+			logger.Error("err=", "err", err)
 			return nil, nil
 		}
 
@@ -105,10 +106,10 @@ func bqueues_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bqueuesInfo, er
 
 }
 
-func FormatQueusStatus(status string, logger log.Logger) float64 {
+func FormatQueusStatus(status string, logger *slog.Logger) float64 {
 	state := strings.ToLower(status)
 //	level.Debug(logger).Log("当前获取到的值是", status, "转换后的值是", state)
-	level.Debug(logger).Log("The current value obtained is ", status, "The converted value is ", state)
+	logger.Debug("The current value obtained is ", "status", status, "The converted value is ", "state", state)
 	switch {
 	case state == "open:active":
 		return float64(1)
@@ -126,12 +127,12 @@ func FormatQueusStatus(status string, logger log.Logger) float64 {
 func (c *QueuesCollector) parseQueuesJobCount(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "bqueues", "-w")
 	if err != nil {
-		level.Error(c.logger).Log("err=", err)
+		c.logger.Error("err=", "err", err)
 		return nil
 	}
 	queues, err := bqueues_CsvtoStruct(output, c.logger)
 	if err != nil {
-		level.Error(c.logger).Log("err=", err)
+		c.logger.Error("err=", "err", err)
 		return nil
 	}
 

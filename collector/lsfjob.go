@@ -2,17 +2,18 @@ package collector
 
 import (
 	"fmt"
-//	"time"
 	"io"
 	"bytes"
 	"strconv"
 	"encoding/csv"
 	"encoding/json"
+	"log/slog"
+	"strings"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/jszwec/csvutil"
+
+	"lsf_exporter/config"
 )
 
 type Job struct {
@@ -36,6 +37,7 @@ type Job struct {
 	PendTime      string
 	EPendTime     string
 	IPendTime     string
+	Solver        string
 	SrcJobid      string
   DstJobid      string
   SrcCluster    string
@@ -48,7 +50,8 @@ type JobCollector struct {
   JobInfoEPendingTime *prometheus.Desc
   JobInfoIPendingTime *prometheus.Desc
 //	JobInfo *prometheus.Desc
-	logger  log.Logger
+	logger  *slog.Logger
+	solverMap map[string]string
 }
 
 func init() {
@@ -57,7 +60,10 @@ func init() {
 }
 
 // NewLSFJobCollector returns a new Collector exposing job info
-func NewLSFJobCollector(logger log.Logger) (Collector, error) {
+func NewLSFJobCollector(logger *slog.Logger, config *config.Configuration) (Collector, error) {
+	logger.Debug("LSFJobCollector: LsfStdSolverConfig path:", "path", config.CliOpts.LsfStdSolverConfig)
+	solverMap := GetSolverMapping(config.CliOpts.LsfStdSolverConfig)
+	logger.Debug("LSFJobCollector: Loaded solver mappings", "count", len(solverMap))
 
 	labelsName := []string{
 		  "ID",
@@ -70,6 +76,7 @@ func NewLSFJobCollector(logger log.Logger) (Collector, error) {
       "UserGroup",
 			"Project",
 			"Application",
+			"Solver",
 			"JGroup",
 			"Dependency",
 			"NSlot",
@@ -116,6 +123,7 @@ func NewLSFJobCollector(logger log.Logger) (Collector, error) {
 		),
 
 		logger: logger,
+		solverMap: solverMap,
 	}, nil
 }
 
@@ -163,6 +171,7 @@ func parseJobStatus( jobJson bjobsInfo ) Job {
 		PendTime:      jobJson.PEND_TIME,
 		EPendTime:     jobJson.EPENDTIME,
 		IPendTime:     jobJson.IPENDTIME,
+		Solver:        jobJson.APPLICATION, // Placeholder, will be standardized later
 		SrcJobid:      jobJson.SRCJOBID,
     DstJobid:      jobJson.DSTJOBID,
     SrcCluster:    jobJson.SRCCLUSTER,
@@ -177,15 +186,15 @@ type lsf_answer struct {
 	RECORDS []bjobsInfo `json:"RECORDS"`
 }
 
-func bjobs_JsontoStruct(lsfOutput []byte, logger log.Logger) ([]bjobsInfo, error) {
+func bjobs_JsontoStruct(lsfOutput []byte, logger *slog.Logger) ([]bjobsInfo, error) {
 	//var bjobsInfos []bjobsInfo
   lsfAnswer := &lsf_answer{}
 
   //fmt.Printf("%+s", lsfOutput)
 	//err := json.Unmarshal(lsfOutput, &bjobsInfos)
-	err := json.Unmarshal(lsfOutput, lsfAnswer)
-	if err != nil {
-    level.Error(logger).Log("err=", err)
+	    err := json.Unmarshal(lsfOutput, lsfAnswer)
+	    if err != nil {
+    logger.Error("err=", "err", err)
     return nil, nil
   }
   //fmt.Printf("%+v\n", lsfAnswer.JOBS)
@@ -194,7 +203,7 @@ func bjobs_JsontoStruct(lsfOutput []byte, logger log.Logger) ([]bjobsInfo, error
 	return lsfAnswer.RECORDS, nil
 }
 
-func bjobs_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bjobsInfo, error) {
+func bjobs_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bjobsInfo, error) {
   csv_out := csv.NewReader(TrimReader{bytes.NewReader(lsfOutput)})
   csv_out.LazyQuotes = true
   csv_out.Comma = ' '
@@ -202,7 +211,7 @@ func bjobs_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bjobsInfo, error)
 
   dec, err := csvutil.NewDecoder(csv_out)
   if err != nil {
-    level.Error(logger).Log("err=", err)
+          logger.Error("err=", "err", err)
     return nil, nil
   }
 
@@ -212,9 +221,6 @@ func bjobs_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bjobsInfo, error)
     var u bjobsInfo
     if err := dec.Decode(&u); err == io.EOF {
       break
-    } else if err != nil {
-      level.Error(logger).Log("err=", err)
-      return nil, nil
     }
 
     bjobsInfos = append(bjobsInfos, u)
@@ -228,7 +234,7 @@ func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "bjobs", "-X", "-u", "all", "-o",
 	"JOBID USER STAT QUEUE FROM_HOST EXEC_HOST JOB_NAME SUBMIT_TIME UGROUP PROJECT APPLICATION JOB_GROUP DEPENDENCY NALLOC_SLOT MIN_REQ_PROC START_TIME SUB_CWD PEND_TIME EPENDTIME IPENDTIME SRCJOBID DSTJOBID SRCLUSTER FWD_CLUSTER", "-json")
   if err != nil {
-    level.Error(c.logger).Log("err=", err, output)
+    c.logger.Error("err=", "err", err, "output", string(output))
     return nil
   }
   //fmt.Printf("%+s", output)
@@ -237,7 +243,7 @@ func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
 	//jobs, err := bjobs_CsvtoStruct(output, c.logger)
 	jobs, err := bjobs_JsontoStruct(output, c.logger)
 	if err != nil {
-    level.Error(c.logger).Log("err=", err)
+    c.logger.Error("err=", "err", err)
     return nil
   }
   //fmt.Printf("%+v\n", jobs)
@@ -245,8 +251,22 @@ func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
 
 
 	for _, j := range jobs {
-
 		jobStatus := parseJobStatus(j)
+
+		var solverName string
+		if jobStatus.Application != "" {
+			solverName = jobStatus.Application
+		} else {
+			solverName = jobStatus.Queue
+		}
+		c.logger.Debug("LSFJobCollector: Raw Application: %s, Raw Queue: %s, Derived SolverName: %s", "application", jobStatus.Application, "queue", jobStatus.Queue, "solver_name", solverName)
+		standardizedSolver := c.solverMap[strings.ToLower(solverName)]
+		if standardizedSolver == "" {
+			standardizedSolver = "unknown"
+		}
+		c.logger.Debug("LSFJobCollector: Standardized Solver: %s", "standardized_solver", standardizedSolver)
+		jobStatus.Solver = standardizedSolver
+
 	  labelsValue := []string{
 		  jobStatus.ID,
 			jobStatus.User,
@@ -258,6 +278,7 @@ func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
 			jobStatus.UserGroup,
 			jobStatus.Project,
 			jobStatus.Application,
+			jobStatus.Solver,
 			jobStatus.JGroup,
 			jobStatus.Dependency,
 			jobStatus.NSlot,
@@ -274,9 +295,7 @@ func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
 			jobStatus.SubmitTime,
 	  }
 
-		//fmt.Printf("%s %+v\n", "jobStatus:", jobStatus)
 		nCPU, _ := strconv.ParseFloat(jobStatus.NProc, 64)
-		// parameter order must follow declaration order of Labels (see top)
 		ch <- prometheus.MustNewConstMetric(c.JobInfoNCpuCount, prometheus.GaugeValue, nCPU,
 		  labelsValue...,
 		)
@@ -291,12 +310,12 @@ func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
 		  labelsValue...,
 		)
 
-		ipTime, _ := strconv.ParseFloat(jobStatus.IPendTime, 64)
+		ipTime, _ := strconv.ParseFloat(jobStatus.IPendTime, 64);
 		ch <- prometheus.MustNewConstMetric(c.JobInfoIPendingTime, prometheus.CounterValue, ipTime,
 		  labelsValue...,
 		)
 
-		}
+	}
 
 	return nil
 

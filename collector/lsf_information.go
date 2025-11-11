@@ -1,18 +1,55 @@
 package collector
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
+	"log/slog"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"lsf_exporter/config"
 )
 
+func GetSolverMapping(filePath string) map[string]string {
+	solverMap := make(map[string]string)
+	if filePath == "" {
+		return solverMap
+	}
+
+		slog.Debug(fmt.Sprintf("GetSolverMapping: Attempting to open solver mapping file: %s", filePath))
+	file, err := os.Open(filePath)
+	if err != nil {
+		slog.Error(fmt.Sprintf("GetSolverMapping: Failed to open solver mapping file %s: %q", filePath, err))
+		return solverMap
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.SplitN(line, ",", 2)
+		if len(parts) == 2 {
+			allowedKey := strings.ToLower(strings.TrimSpace(parts[0]))
+			solverLabel := strings.TrimSpace(parts[1])
+			solverMap[allowedKey] = solverLabel
+			slog.Debug(fmt.Sprintf("GetSolverMapping: Parsed mapping: raw_line='%s', key_part='%s', value_part='%s', allowedKey='%s', solverLabel='%s'", line, parts[0], parts[1], allowedKey, solverLabel))
+		} else {
+			slog.Debug(fmt.Sprintf("GetSolverMapping: Skipping line (not 2 parts): raw_line='%s'", line))
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		slog.Error(fmt.Sprintf("GetSolverMapping: Error reading solver mapping file %s: %q", filePath, err))
+	}
+	slog.Debug(fmt.Sprintf("GetSolverMapping: Loaded solver map: %+v", solverMap))
+	return solverMap
+}
 type InformationCollector struct {
 	LsfInformation *prometheus.Desc
-	logger         log.Logger
+	logger         *slog.Logger
 }
 
 func init() {
@@ -20,7 +57,7 @@ func init() {
 }
 
 // NewLmstatCollector returns a new Collector exposing lmstat license stats.
-func NewLSFInformationCollector(logger log.Logger) (Collector, error) {
+func NewLSFInformationCollector(logger *slog.Logger, config *config.Configuration) (Collector, error) {
 
 	return &InformationCollector{
 		LsfInformation: prometheus.NewDesc(
@@ -48,22 +85,22 @@ func (c *InformationCollector) Update(ch chan<- prometheus.Metric) error {
 	return nil
 }
 
-func lsfOutput(logger log.Logger, exe_file string, args ...string) ([]byte, error) {
+func lsfOutput(logger *slog.Logger, exe_file string, args ...string) ([]byte, error) {
 	// _, err := os.Stat(*LSF_BINDIR)
 	// if os.IsNotExist(err) {
-	// 	level.Error(logger).Log("err", *LSF_BINDIR, "missing")
+	// 	logger.Error("err", "err", *LSF_BINDIR, "missing")
 	// 	os.Exit(1)
 	// }
 
 	// _, err = os.Stat(*LSF_SERVERDIR)
 	// if os.IsNotExist(err) {
-	// 	level.Error(logger).Log("err", *LSF_SERVERDIR, "missing")
+	// 	logger.Error("err", "err", *LSF_SERVERDIR, "missing")
 	// 	os.Exit(1)
 	// }
 
 	// _, err = os.Stat(*LSF_ENVDIR)
 	// if os.IsNotExist(err) {
-	// 	level.Error(logger).Log("err", *LSF_ENVDIR, "missing")
+	// 	logger.Error("err", "err", *LSF_ENVDIR, "missing")
 	// 	os.Exit(1)
 	// }
 
@@ -82,7 +119,7 @@ func lsfOutput(logger log.Logger, exe_file string, args ...string) ([]byte, erro
 func (c *InformationCollector) parsebLsfClusterInfo(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "lsid", "")
 	if err != nil {
-		level.Error(c.logger).Log("err: ", err)
+		c.logger.Error("err: ", "err", err)
 		return nil
 	}
 	lsf_summary := string(output)
@@ -111,7 +148,7 @@ func (c *InformationCollector) parsebLsfClusterInfo(ch chan<- prometheus.Metric)
 		}
 	}
 
-	level.Debug(c.logger).Log("当前集群名称：", md["cluster_name"], ",当前的master节点名是:", md["master_name"], ",版本是:", md["lsf_version"])
+	c.logger.Debug("当前集群名称：", "cluster_name", md["cluster_name"], ",当前的master节点名是:", "master_name", md["master_name"], ",版本是:", "lsf_version", md["lsf_version"])
 	ch <- prometheus.MustNewConstMetric(c.LsfInformation, prometheus.GaugeValue, 1.0, md["cluster_name"], md["master_name"], md["lsf_version"])
 
 	return nil

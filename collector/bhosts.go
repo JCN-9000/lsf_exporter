@@ -7,11 +7,12 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"log/slog"
 
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/jszwec/csvutil"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"lsf_exporter/config"
 )
 
 type bHostsCollector struct {
@@ -22,7 +23,7 @@ type bHostsCollector struct {
 	HostSSUSPJobCount *prometheus.Desc
 	HostUSUSPJobCount *prometheus.Desc
 	HostStatus        *prometheus.Desc
-	logger            log.Logger
+	logger            *slog.Logger
 }
 
 func init() {
@@ -30,7 +31,7 @@ func init() {
 }
 
 // NewLmstatCollector returns a new Collector exposing lmstat license stats.
-func NewLSFbHostCollector(logger log.Logger) (Collector, error) {
+func NewLSFbHostCollector(logger *slog.Logger, config *config.Configuration) (Collector, error) {
 
 	return &bHostsCollector{
 		HostRunningJobCount: prometheus.NewDesc(
@@ -102,7 +103,7 @@ func (tr TrimReader) Read(bs []byte) (int, error) {
 	return len(trimmed), nil
 }
 
-func bhost_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bhostInfo, error) {
+func bhost_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bhostInfo, error) {
 	csv_out := csv.NewReader(TrimReader{bytes.NewReader(lsfOutput)})
 	csv_out.LazyQuotes = true
 	csv_out.Comma = ' '
@@ -110,7 +111,7 @@ func bhost_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bhostInfo, error)
 
 	dec, err := csvutil.NewDecoder(csv_out)
 	if err != nil {
-		level.Error(logger).Log("err=", err)
+		logger.Error("err=", "err", err)
 		return nil, nil
 	}
 
@@ -121,7 +122,7 @@ func bhost_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bhostInfo, error)
 		if err := dec.Decode(&u); err == io.EOF {
 			break
 		} else if err != nil {
-			level.Error(logger).Log("err=", err)
+			logger.Error("err=", "err", err)
 			return nil, nil
 		}
 
@@ -131,9 +132,9 @@ func bhost_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]bhostInfo, error)
 
 }
 
-func FormatbhostsStatus(status string, logger log.Logger) float64 {
+func FormatbhostsStatus(status string, logger *slog.Logger) float64 {
 	state := strings.ToLower(status)
-	level.Debug(logger).Log("The value currently obtained is: ", status, "The converted value is: ", state)
+	logger.Debug("The value currently obtained is: ", "status", status, "The converted value is: ", "state", state)
 	switch state {
 	case "ok":
 		return float64(1)
@@ -151,12 +152,12 @@ func FormatbhostsStatus(status string, logger log.Logger) float64 {
 func (c *bHostsCollector) parsebHostJobCount(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "bhosts", "-w", "-X")
 	if err != nil {
-		level.Error(c.logger).Log("err: ", err)
+		c.logger.Error("err: ", "err", err)
 		return nil
 	}
 	bhosts, err := bhost_CsvtoStruct(output, c.logger)
 	if err != nil {
-		level.Error(c.logger).Log("err: ", err)
+		c.logger.Error("err: ", "err", err)
 		return nil
 	}
 

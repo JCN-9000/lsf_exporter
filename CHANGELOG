@@ -1,0 +1,11 @@
+// SPDX-FileCopyrightText: 2023 Rivos Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+
+## 0.0.7 (2025-11-10)
+
+### Features
+
+- **exporter**: Add `Solver` label to `lsf_bjobs_pending_time_eligible_total` metric, standardized using a mapping file specified by the `lsf.std-solver-config` flag.
+
+# vim:set ai et sts=2 sw=2

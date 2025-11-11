@@ -38,9 +38,14 @@ type License struct {
 	MonitorVersions     bool   `yaml:"monitor_versions,omitempty"`
 }
 
+type CliOpts struct {
+	LsfStdSolverConfig string
+}
+
 // Configuration type for all licenses.
 type Configuration struct {
 	Licenses []License `yaml:"licenses"`
+	CliOpts  CliOpts
 }
 
 // Load parses the YAML file.

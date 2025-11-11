@@ -19,11 +19,12 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"log/slog"
 
 	kingpin "github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"lsf_exporter/config"
 )
 
 // Namespace defines the common namespace to be used by all metrics.
@@ -56,14 +57,14 @@ const (
 )
 
 var (
-	factories              = make(map[string]func(logger log.Logger) (Collector, error))
+	factories              = make(map[string]func(logger *slog.Logger, config *config.Configuration) (Collector, error))
 	initiatedCollectorsMtx = sync.Mutex{}
 	initiatedCollectors    = make(map[string]Collector)
 	collectorState         = make(map[string]*bool)
 	forcedCollectors       = map[string]bool{} // collectors which have been explicitly enabled or disabled
 )
 
-func registerCollector(collector string, isDefaultEnabled bool, factory func(logger log.Logger) (Collector, error)) {
+func registerCollector(collector string, isDefaultEnabled bool, factory func(logger *slog.Logger, config *config.Configuration) (Collector, error)) {
 
 	var helpDefaultState string
 	if isDefaultEnabled {
@@ -84,7 +85,7 @@ func registerCollector(collector string, isDefaultEnabled bool, factory func(log
 // LsfCollector implements the prometheus.Collector interface.
 type LsfCollector struct {
 	Collectors map[string]Collector
-	logger     log.Logger
+	logger     *slog.Logger
 }
 
 // DisableDefaultCollectors sets the collector state to false for all collectors which
@@ -110,7 +111,7 @@ func collectorFlagAction(collector string) func(ctx *kingpin.ParseContext) error
 }
 
 // NewLsfCollector creates a new LsfCollector.
-func NewLsfCollector(logger log.Logger, filters ...string) (*LsfCollector, error) {
+func NewLsfCollector(logger *slog.Logger, config *config.Configuration, filters ...string) (*LsfCollector, error) {
 	f := make(map[string]bool)
 
 	for _, filter := range filters {
@@ -137,7 +138,7 @@ func NewLsfCollector(logger log.Logger, filters ...string) (*LsfCollector, error
 		if collector, ok := initiatedCollectors[key]; ok {
 			collectors[key] = collector
 		} else {
-			collector, err := factories[key](log.With(logger, "collector", key))
+			collector, err := factories[key](logger.With("collector", key), config)
 			if err != nil {
 				return nil, err
 			}
@@ -172,18 +173,18 @@ func (n LsfCollector) Collect(ch chan<- prometheus.Metric) {
 	wg.Wait()
 }
 
-func execute(name string, c Collector, ch chan<- prometheus.Metric, logger log.Logger) {
+func execute(name string, c Collector, ch chan<- prometheus.Metric, logger *slog.Logger) {
 	var success float64
 
 	begin := time.Now()
 	err := c.Update(ch)
 	duration := time.Since(begin)
 	if err != nil {
-		level.Error(logger).Log(name, "collector failed after:", duration.Seconds(), ":", err)
+		logger.Error(name, "collector failed after:", duration.Seconds(), ":", err)
 
 		success = 0
 	} else {
-		level.Debug(logger).Log("OK:", name, "collector succeeded after:", duration.Seconds())
+		logger.Debug("OK:", name, "collector succeeded after:", duration.Seconds())
 		success = 1
 	}
 	ch <- prometheus.MustNewConstMetric(scrapeDurationDesc, prometheus.GaugeValue, duration.Seconds(), name)

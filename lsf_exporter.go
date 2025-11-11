@@ -22,15 +22,15 @@ import (
 	"os/user"
 	"runtime"
 	"sort"
+	"log/slog"
 
 	"github.com/prometheus/common/promlog"
 	"github.com/prometheus/common/promlog/flag"
 
 //	"github.com/a270443177/lsf_exporter/collector"
 	"lsf_exporter/collector"
+	"lsf_exporter/config"
 	"github.com/alecthomas/kingpin/v2"
-	"github.com/go-kit/log"
-	"github.com/go-kit/log/level"
 	"github.com/prometheus/client_golang/prometheus"
 	promcollectors "github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -49,15 +49,17 @@ type handler struct {
 	exporterMetricsRegistry *prometheus.Registry
 	includeExporterMetrics  bool
 	maxRequests             int
-	logger                  log.Logger
+	logger                  *slog.Logger
+	config                  *config.Configuration
 }
 
-func newHandler(includeExporterMetrics bool, maxRequests int, logger log.Logger) *handler {
+func newHandler(includeExporterMetrics bool, maxRequests int, logger *slog.Logger, cfg *config.Configuration) *handler {
 	h := &handler{
 		exporterMetricsRegistry: prometheus.NewRegistry(),
 		includeExporterMetrics:  includeExporterMetrics,
 		maxRequests:             maxRequests,
 		logger:                  logger,
+		config:                  cfg,
 	}
 	if h.includeExporterMetrics {
 		h.exporterMetricsRegistry.MustRegister(
@@ -65,7 +67,7 @@ func newHandler(includeExporterMetrics bool, maxRequests int, logger log.Logger)
 			promcollectors.NewGoCollector(),
 		)
 	}
-	if innerHandler, err := h.innerHandler(); err != nil {
+	if innerHandler, err := h.innerHandler(h.config); err != nil {
 		panic(fmt.Sprintf("Couldn't create metrics handler: %s", err))
 	} else {
 		h.unfilteredHandler = innerHandler
@@ -76,7 +78,7 @@ func newHandler(includeExporterMetrics bool, maxRequests int, logger log.Logger)
 // ServeHTTP implements http.Handler.
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	filters := r.URL.Query()["collect[]"]
-	level.Debug(h.logger).Log("msg", "collect query:", "filters", filters)
+	h.logger.Debug("collect query:", "filters", filters)
 
 	if len(filters) == 0 {
 		// No filters, use the prepared unfiltered handler.
@@ -84,9 +86,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// To serve filtered metrics, we create a filtering handler on the fly.
-	filteredHandler, err := h.innerHandler(filters...)
+	filteredHandler, err := h.innerHandler(h.config, filters...)
 	if err != nil {
-		level.Warn(h.logger).Log("msg", "Couldn't create filtered metrics handler:", "err", err)
+		h.logger.Warn("Couldn't create filtered metrics handler:", "err", err)
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte(fmt.Sprintf("Couldn't create filtered metrics handler: %s", err)))
 		return
@@ -99,8 +101,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // fly. The former is accomplished by calling innerHandler without any arguments
 // (in which case it will log all the collectors enabled via command-line
 // flags).
-func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
-	nc, err := collector.NewLsfCollector(h.logger, filters...)
+func (h *handler) innerHandler(config *config.Configuration, filters ...string) (http.Handler, error) {
+	nc, err := collector.NewLsfCollector(h.logger, config, filters...)
 	if err != nil {
 		return nil, fmt.Errorf("couldn't create collector: %s", err)
 	}
@@ -108,14 +110,14 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 	// Only log the creation of an unfiltered handler, which should happen
 	// only once upon startup.
 	if len(filters) == 0 {
-		level.Info(h.logger).Log("msg", "Enabled collectors")
+		h.logger.Info("Enabled collectors")
 		collectors := []string{}
 		for n := range nc.Collectors {
 			collectors = append(collectors, n)
 		}
 		sort.Strings(collectors)
 		for _, c := range collectors {
-			level.Info(h.logger).Log("collector", c)
+			h.logger.Info("collector", c)
 		}
 	}
 
@@ -127,7 +129,7 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 	handler := promhttp.HandlerFor(
 		prometheus.Gatherers{h.exporterMetricsRegistry, r},
 		promhttp.HandlerOpts{
-			ErrorLog:            stdlog.New(log.NewStdlibAdapter(level.Error(h.logger)), "", 0),
+			ErrorLog:            stdlog.New(os.Stderr, "ERROR: ", stdlog.Ldate|stdlog.Ltime|stdlog.Lshortfile),
 			ErrorHandling:       promhttp.ContinueOnError,
 			MaxRequestsInFlight: h.maxRequests,
 			Registry:            h.exporterMetricsRegistry,
@@ -141,6 +143,15 @@ func (h *handler) innerHandler(filters ...string) (http.Handler, error) {
 		)
 	}
 	return handler, nil
+}
+
+type slogAdapter struct {
+	slog *slog.Logger
+}
+
+func (a *slogAdapter) Log(keyvals ...interface{}) error {
+	a.slog.Error("go-kit log message", keyvals...)
+	return nil
 }
 
 func main() {
@@ -165,6 +176,10 @@ func main() {
 			"runtime.gomaxprocs", "The target number of CPUs Go will run on (GOMAXPROCS)",
 		).Envar("GOMAXPROCS").Default("1").Int()
 		toolkitFlags = kingpinflag.AddFlags(kingpin.CommandLine, ":9818")
+		lsfStdSolverConfig = kingpin.Flag(
+			"lsf.std-solver-config",
+			"Path to the solver standardization mapping file.",
+		).Default("").String()
 	)
 
 	promlogConfig := &promlog.Config{}
@@ -175,21 +190,34 @@ func main() {
 
 	kingpin.HelpFlag.Short('h')
 	kingpin.Parse()
-	logger := promlog.New(promlogConfig)
-//		logger = level.NewFilter(logger, level.AllowDebug())
-//		logger = log.With(logger, "caller", log.DefaultCaller)
+
+	var programLevel = slog.LevelInfo
+	if promlogConfig.Level.String() == "debug" {
+		programLevel = slog.LevelDebug
+	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: programLevel,
+	}))
+
 	if *disableDefaultCollectors {
 		collector.DisableDefaultCollectors()
 	}
-	level.Info(logger).Log("msg", "Starting lsf_exporter", "version", version.Info())
-	level.Info(logger).Log("msg", "Build context", "build_context", version.BuildContext())
+	logger.Info("Starting lsf_exporter", "version", version.Info())
+	logger.Info("Build context", "build_context", version.BuildContext())
 	if user, err := user.Current(); err == nil && user.Uid == "0" {
-		level.Warn(logger).Log("msg", "lsf Exporter is running as root user. This exporter is designed to run as unprivileged user, root is not required.")
+		logger.Warn("lsf Exporter is running as root user. This exporter is designed to run as unprivileged user, root is not required.")
 	}
 	runtime.GOMAXPROCS(*maxProcs)
-	level.Debug(logger).Log("msg", "Go MAXPROCS", "procs", runtime.GOMAXPROCS(0))
+	logger.Debug("Go MAXPROCS", "procs", runtime.GOMAXPROCS(0))
 
-	http.Handle(*metricsPath, newHandler(!*disableExporterMetrics, *maxRequests, logger))
+	cfg := &config.Configuration{
+		CliOpts: config.CliOpts{
+			LsfStdSolverConfig: *lsfStdSolverConfig,
+		},
+	}
+
+	http.Handle(*metricsPath, newHandler(!*disableExporterMetrics, *maxRequests, logger, cfg))
 	if *metricsPath != "/" {
 		landingConfig := web.LandingConfig{
 			Name:        "Lsf Exporter",
@@ -204,15 +232,16 @@ func main() {
 		}
 		landingPage, err := web.NewLandingPage(landingConfig)
 		if err != nil {
-			level.Error(logger).Log("err", err)
+			logger.Error("err", err)
 			os.Exit(1)
 		}
 		http.Handle("/", landingPage)
 	}
 
 	server := &http.Server{}
-	if err := web.ListenAndServe(server, toolkitFlags, logger); err != nil {
-		level.Error(logger).Log("err", err)
+	adapter := &slogAdapter{slog: logger}
+	if err := web.ListenAndServe(server, toolkitFlags, adapter); err != nil {
+		logger.Error("err", err)
 		os.Exit(1)
 	}
 }

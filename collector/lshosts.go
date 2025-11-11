@@ -7,19 +7,19 @@ import (
     "io"
     "strconv"
     "strings"
+    "log/slog"
 
-    "github.com/go-kit/log"
-    "github.com/go-kit/log/level"
     "github.com/jszwec/csvutil"
     "github.com/prometheus/client_golang/prometheus"
-)
-
+    
+    "lsf_exporter/config"
+    )
 type lshostsCollector struct {
     HostMaxMem *prometheus.Desc
     HostMaxSWP *prometheus.Desc
     HostNCpus  *prometheus.Desc
     HostCpuf   *prometheus.Desc
-    logger     log.Logger
+    logger     *slog.Logger
 }
 
 
@@ -28,7 +28,7 @@ func init() {
 }
 
 // NewLmstatCollector returns a new Collector exposing lmstat license stats.
-func NewLSFlshostCollector(logger log.Logger) (Collector, error) {
+func NewLSFlshostCollector(logger *slog.Logger, config *config.Configuration) (Collector, error) {
 
     return &lshostsCollector{
         HostMaxMem: prometheus.NewDesc(
@@ -72,7 +72,7 @@ func (c *lshostsCollector) Update(ch chan<- prometheus.Metric) error {
     return nil
 }
 
-func lshosts_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]lshostsInfo, error) {
+func lshosts_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]lshostsInfo, error) {
     csv_out := csv.NewReader(TrimReader{bytes.NewReader(lsfOutput)})
     csv_out.LazyQuotes = true
     csv_out.Comma = ' '
@@ -81,7 +81,7 @@ func lshosts_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]lshostsInfo, er
 
     dec, err := csvutil.NewDecoder(csv_out)
     if err != nil {
-        level.Error(logger).Log("err=", err)
+        logger.Error("err=", "err", err)
         return nil, nil
     }
 
@@ -93,10 +93,10 @@ func lshosts_CsvtoStruct(lsfOutput []byte, logger log.Logger) ([]lshostsInfo, er
         if err := dec.Decode(&u); err == io.EOF {
             break
 //        } else if err == csvutil.ErrFieldCount {
-//            level.Info(logger).Log("err=", err)
+//            logger.Info("err=", "err", err)
 //            continue
         } else if err != nil {
-            level.Error(logger).Log("err=", err)
+            logger.Error("err=", "err", err)
 //            return nil, nil
         }
 
@@ -151,12 +151,12 @@ func (c *lshostsCollector) parselshostsCount(ch chan<- prometheus.Metric) error 
 //    output, err := lsfOutput(c.logger, "lshosts", "-w")
     output, err := lsfOutput(c.logger, "lshosts", "-o", "HOST_NAME type model cpuf ncpus maxmem maxswp  server nprocs ncores nthreads RESOURCES" )
     if err != nil {
-        level.Error(c.logger).Log("err: ", err)
+        c.logger.Error("err: ", "err", err)
         return nil
     }
     lshosts, err := lshosts_CsvtoStruct(output, c.logger)
     if err != nil {
-        level.Error(c.logger).Log("err: ", err)
+        c.logger.Error("err: ", "err", err)
         return nil
     }
 
