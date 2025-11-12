@@ -118,7 +118,10 @@ func lsload_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]lsloadInfo, er
 
 func FormatlsLoadStatus(status string, logger *slog.Logger) float64 {
 	state := strings.ToLower(status)
-	logger.Debug("The current value obtained is ", "status", status, "The converted value is ", "state", state)
+	logger.Debug("The current value obtained is ",
+	  "status", status,
+		"The converted value is ", "",
+		"state", state)
 	switch {
 	case state == "ok":
 		return float64(1)

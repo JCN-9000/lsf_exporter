@@ -14,6 +14,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	stdlog "log"
 	"net/http"
@@ -117,7 +118,8 @@ func (h *handler) innerHandler(config *config.Configuration, filters ...string) 
 		}
 		sort.Strings(collectors)
 		for _, c := range collectors {
-			h.logger.Info("collector", c)
+			// FIX: Pass collector name as a key-value pair
+			h.logger.Info("Collector enabled", "name", c)
 		}
 	}
 
@@ -150,7 +152,75 @@ type slogAdapter struct {
 }
 
 func (a *slogAdapter) Log(keyvals ...interface{}) error {
-	a.slog.Error("go-kit log message", keyvals...)
+	var slogMsg string = "(no message)"
+	var slogLevel slog.Level = slog.LevelInfo // Default to Info level
+	var slogArgs []any // Directly build the args slice for slog.Log
+
+	for i := 0; i < len(keyvals); {
+		var key string
+		var value interface{}
+
+		// Attempt to get a string key from keyvals[i]
+		if k, ok := keyvals[i].(string); ok {
+			key = k
+			// If it's a string key, try to get its value from keyvals[i+1]
+			if i+1 < len(keyvals) {
+				value = keyvals[i+1]
+				i += 2 // Consumed a key-value pair
+			} else {
+				// String key without a corresponding value
+				value = "(MISSING_VALUE)"
+				i += 1 // Consumed only the key
+			}
+		} else {
+			// keyvals[i] is not a string, so it must be a value.
+			// Generate a generic key for it.
+			key = fmt.Sprintf("arg%d", len(slogArgs)/2) // Use len(slogArgs)/2 for arg index
+			value = keyvals[i]
+			i += 1 // Consumed only the value
+		}
+
+		// Now, process the extracted key and value
+		switch key {
+		case "level":
+			if l, ok := value.(string); ok {
+				switch l {
+				case "debug":
+					slogLevel = slog.LevelDebug
+				case "info":
+					slogLevel = slog.LevelInfo
+				case "warn":
+					slogLevel = slog.LevelWarn
+				case "error":
+					slogLevel = slog.LevelError
+				}
+			}
+		case "msg":
+			slogMsg = fmt.Sprint(value)
+		default:
+			// Explicitly convert numeric values to string to avoid potential !BADKEY= issues
+			// if slog has a hidden expectation for string values in certain contexts.
+			slogArgs = append(slogArgs, key) // Append key first
+			switch v := value.(type) {
+			case float64:
+				slogArgs = append(slogArgs, fmt.Sprintf("%f", v))
+			case float32:
+				slogArgs = append(slogArgs, fmt.Sprintf("%f", v))
+			case int:
+				slogArgs = append(slogArgs, fmt.Sprintf("%d", v))
+			case int64:
+				slogArgs = append(slogArgs, fmt.Sprintf("%d", v))
+			case int32:
+				slogArgs = append(slogArgs, fmt.Sprintf("%d", v))
+			case string:
+				slogArgs = append(slogArgs, v)
+			default:
+				slogArgs = append(slogArgs, value)
+			}
+		}
+	}
+
+	a.slog.Log(context.Background(), slogLevel, slogMsg, slogArgs...)
 	return nil
 }
 

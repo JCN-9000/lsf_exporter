@@ -259,12 +259,16 @@ func (c *JobCollector) getJobStatus(ch chan<- prometheus.Metric) error {
 		} else {
 			solverName = jobStatus.Queue
 		}
-		c.logger.Debug("LSFJobCollector: Raw Application: %s, Raw Queue: %s, Derived SolverName: %s", "application", jobStatus.Application, "queue", jobStatus.Queue, "solver_name", solverName)
+		c.logger.Debug("LSFJobCollector:",
+		  "application", jobStatus.Application,
+			"queue", jobStatus.Queue,
+			"solver_name", solverName)
 		standardizedSolver := c.solverMap[strings.ToLower(solverName)]
 		if standardizedSolver == "" {
 			standardizedSolver = "unknown"
 		}
-		c.logger.Debug("LSFJobCollector: Standardized Solver: %s", "standardized_solver", standardizedSolver)
+		c.logger.Debug("LSFJobCollector:",
+		  "standardized_solver", standardizedSolver)
 		jobStatus.Solver = standardizedSolver
 
 	  labelsValue := []string{

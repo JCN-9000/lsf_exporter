@@ -184,7 +184,9 @@ func execute(name string, c Collector, ch chan<- prometheus.Metric, logger *slog
 
 		success = 0
 	} else {
-		logger.Debug("OK:", name, "collector succeeded after:", duration.Seconds())
+		logger.Debug("OK:",
+		  "name:", name,
+			"collector succeeded after:", duration.Seconds())
 		success = 1
 	}
 	ch <- prometheus.MustNewConstMetric(scrapeDurationDesc, prometheus.GaugeValue, duration.Seconds(), name)

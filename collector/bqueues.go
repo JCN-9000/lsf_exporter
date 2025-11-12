@@ -109,7 +109,10 @@ func bqueues_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bqueuesInfo, 
 func FormatQueusStatus(status string, logger *slog.Logger) float64 {
 	state := strings.ToLower(status)
 //	level.Debug(logger).Log("当前获取到的值是", status, "转换后的值是", state)
-	logger.Debug("The current value obtained is ", "status", status, "The converted value is ", "state", state)
+	logger.Debug("The current value obtained is ",
+	  "status", status,
+		"The converted value is ", "",
+		"state", state)
 	switch {
 	case state == "open:active":
 		return float64(1)

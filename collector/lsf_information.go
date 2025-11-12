@@ -148,7 +148,11 @@ func (c *InformationCollector) parsebLsfClusterInfo(ch chan<- prometheus.Metric)
 		}
 	}
 
-	c.logger.Debug("当前集群名称：", "cluster_name", md["cluster_name"], ",当前的master节点名是:", "master_name", md["master_name"], ",版本是:", "lsf_version", md["lsf_version"])
+//	c.logger.Debug("当前集群名称：", "cluster_name", md["cluster_name"], ",当前的master节点名是:", "master_name", md["master_name"], ",版本是:", "lsf_version", md["lsf_version"])
+  c.logger.Debug("Current cluster info:",
+    "cluster_name", md["cluster_name"],
+		"master_name", md["master_name"],
+		"lsf_version", md["lsf_version"])
 	ch <- prometheus.MustNewConstMetric(c.LsfInformation, prometheus.GaugeValue, 1.0, md["cluster_name"], md["master_name"], md["lsf_version"])
 
 	return nil

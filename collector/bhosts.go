@@ -134,7 +134,9 @@ func bhost_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bhostInfo, erro
 
 func FormatbhostsStatus(status string, logger *slog.Logger) float64 {
 	state := strings.ToLower(status)
-	logger.Debug("The value currently obtained is: ", "status", status, "The converted value is: ", "state", state)
+	logger.Debug("The value currently obtained is: ",
+	  "status", status,
+		"state", state)
 	switch state {
 	case "ok":
 		return float64(1)
