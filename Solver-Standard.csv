@@ -175,6 +175,7 @@ starccm_qs,StarCCMP
 starccm+,StarCCMP
 starccm,StarCCMP
 starccm_test,StarCCMP
+propcfd_aws,StarCCMP
 sysweld_aws,Sysweld
 sysweld,Sysweld
 taitherm_aws,TaiTherm

@@ -5,9 +5,9 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
-	"log/slog"
 
 	"github.com/jszwec/csvutil"
 	"github.com/prometheus/client_golang/prometheus"
@@ -85,7 +85,7 @@ func bqueues_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bqueuesInfo, 
 
 	dec, err := csvutil.NewDecoder(csv_out)
 	if err != nil {
-		logger.Error("err=", "err", err)
+		logger.Error("Error decoding CSV", "err", err)
 		return nil, nil
 	}
 
@@ -96,7 +96,7 @@ func bqueues_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bqueuesInfo, 
 		if err := dec.Decode(&u); err == io.EOF {
 			break
 		} else if err != nil {
-			logger.Error("err=", "err", err)
+			logger.Error("Error decoding record", "err", err)
 			return nil, nil
 		}
 
@@ -108,11 +108,8 @@ func bqueues_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bqueuesInfo, 
 
 func FormatQueusStatus(status string, logger *slog.Logger) float64 {
 	state := strings.ToLower(status)
-//	level.Debug(logger).Log("当前获取到的值是", status, "转换后的值是", state)
-	logger.Debug("The current value obtained is ",
-	  "status", status,
-		"The converted value is ", "",
-		"state", state)
+	//	level.Debug(logger).Log("当前获取到的值是", status, "转换后的值是", state)
+	logger.Debug("Current value obtained", "status", status, "state", state)
 	switch {
 	case state == "open:active":
 		return float64(1)
@@ -130,12 +127,12 @@ func FormatQueusStatus(status string, logger *slog.Logger) float64 {
 func (c *QueuesCollector) parseQueuesJobCount(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "bqueues", "-w")
 	if err != nil {
-		c.logger.Error("err=", "err", err)
+		c.logger.Error("Failed to get bqueues output", "err", err)
 		return nil
 	}
 	queues, err := bqueues_CsvtoStruct(output, c.logger)
 	if err != nil {
-		c.logger.Error("err=", "err", err)
+		c.logger.Error("Failed to parse bqueues output", "err", err)
 		return nil
 	}
 

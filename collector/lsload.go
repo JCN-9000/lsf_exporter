@@ -5,9 +5,9 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"log/slog"
 	"strconv"
 	"strings"
-	"log/slog"
 
 	"github.com/jszwec/csvutil"
 	"github.com/prometheus/client_golang/prometheus"
@@ -92,7 +92,7 @@ func lsload_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]lsloadInfo, er
 
 	dec, err := csvutil.NewDecoder(csv_out)
 	if err != nil {
-		logger.Error("err=", "err", err)
+		logger.Error("Error decoding CSV", "err", err)
 		return nil, nil
 	}
 
@@ -103,11 +103,12 @@ func lsload_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]lsloadInfo, er
 		if err := dec.Decode(&u); err == io.EOF {
 			break
 		} else if err != nil {
+			if dec.Record()[1] == "unavail" {
+				continue
+			}
 			recinfo := dec.Record()[0] + " " + dec.Record()[1]
-			logger.Error("rec=", "recinfo", recinfo)
-			logger.Error("err=", "err", err)
-			if dec.Record()[1] == "unavail" { continue }
-//			return nil, nil
+			logger.Error("Error decoding record", "recinfo", recinfo, "err", err)
+			//			return nil, nil
 		}
 
 		lsloadInfos = append(lsloadInfos, u)
@@ -118,10 +119,7 @@ func lsload_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]lsloadInfo, er
 
 func FormatlsLoadStatus(status string, logger *slog.Logger) float64 {
 	state := strings.ToLower(status)
-	logger.Debug("The current value obtained is ",
-	  "status", status,
-		"The converted value is ", "",
-		"state", state)
+	logger.Debug("Current value obtained", "status", status, "state", state)
 	switch {
 	case state == "ok":
 		return float64(1)
@@ -145,7 +143,7 @@ func ConvertUT(data string, logger *slog.Logger) float64 {
 
 	fl, err := strconv.ParseFloat(data_new, 64)
 	if err != nil {
-		logger.Error("err: ", "err", err)
+		logger.Error("Failed to parse float", "err", err)
 		return -1
 	}
 	return fl
@@ -154,12 +152,12 @@ func ConvertUT(data string, logger *slog.Logger) float64 {
 func (c *lsLoadCollector) parselsLoad(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "lsload", "-w")
 	if err != nil {
-		c.logger.Error("err: ", "err", err)
+		c.logger.Error("Failed to get lsload output", "err", err)
 		return nil
 	}
 	lsloads, err := lsload_CsvtoStruct(output, c.logger)
 	if err != nil {
-		c.logger.Error("err: ", "err", err)
+		c.logger.Error("Failed to parse lsload output", "err", err)
 		return nil
 	}
 

@@ -1,209 +1,208 @@
 package collector
 
 import (
-    "bytes"
-    "encoding/csv"
-    "fmt"
-    "io"
-    "strconv"
-    "strings"
-    "log/slog"
+	"bytes"
+	"encoding/csv"
+	"fmt"
+	"io"
+	"log/slog"
+	"strconv"
+	"strings"
 
-    "github.com/jszwec/csvutil"
-    "github.com/prometheus/client_golang/prometheus"
-    
-    "lsf_exporter/config"
-    )
+	"github.com/jszwec/csvutil"
+	"github.com/prometheus/client_golang/prometheus"
+
+	"lsf_exporter/config"
+)
+
 type lshostsCollector struct {
-    HostMaxMem *prometheus.Desc
-    HostMaxSWP *prometheus.Desc
-    HostNCpus  *prometheus.Desc
-    HostCpuf   *prometheus.Desc
-    logger     *slog.Logger
+	HostMaxMem *prometheus.Desc
+	HostMaxSWP *prometheus.Desc
+	HostNCpus  *prometheus.Desc
+	HostCpuf   *prometheus.Desc
+	logger     *slog.Logger
 }
 
-
 func init() {
-    registerCollector("lshosts", defaultEnabled, NewLSFlshostCollector)
+	registerCollector("lshosts", defaultEnabled, NewLSFlshostCollector)
 }
 
 // NewLmstatCollector returns a new Collector exposing lmstat license stats.
 func NewLSFlshostCollector(logger *slog.Logger, config *config.Configuration) (Collector, error) {
 
-    return &lshostsCollector{
-        HostMaxMem: prometheus.NewDesc(
-            prometheus.BuildFQName(namespace, "lshosts", "max_mem"),
-            "The maximum amount of physical memory available for user processes.     By default, the amount is displayed in KB. The amount can appear in MB depending on the actual system memory. Use the LSF_UNIT_FOR_LIMITS parameter in the lsf.conf file to specify a larger unit for the limit (GB, TB, PB, or EB).",
-            []string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
-        ),
-        HostMaxSWP: prometheus.NewDesc(
-            prometheus.BuildFQName(namespace, "lshosts", "max_swp"),
-            "The total available swap space.  By default, the amount is displayed in KB. The amount can appear in MB depending on the actual system swap space. Use the LSF_UNIT_FOR_LIMITS parameter in the lsf.conf file to specify a larger unit for the limit (GB, TB, PB, or EB).",
-            []string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
-        ),
-        HostNCpus: prometheus.NewDesc(
-            prometheus.BuildFQName(namespace, "lshosts", "ncpus_count"),
-            "The number of processors on this host. If the LSF_ENABLE_DUALCORE=Y parameter is specified in the lsf.conf file for multi-core CPU hosts, displays the number of cores instead of physical CPUs.",
-            []string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
-        ),
-        HostCpuf: prometheus.NewDesc(
-            prometheus.BuildFQName(namespace, "lshosts", "cpuf"),
-            "The relative CPU performance factor. The CPU factor is used to scale the CPU load value so that differences in CPU speeds are considered. The faster the CPU, the larger the CPU factor.The default CPU factor of a host with an host type is 1.0. unknown",
-            []string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
-        ),
-        logger: logger,
-    }, nil
+	return &lshostsCollector{
+		HostMaxMem: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "lshosts", "max_mem"),
+			"The maximum amount of physical memory available for user processes.     By default, the amount is displayed in KB. The amount can appear in MB depending on the actual system memory. Use the LSF_UNIT_FOR_LIMITS parameter in the lsf.conf file to specify a larger unit for the limit (GB, TB, PB, or EB).",
+			[]string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
+		),
+		HostMaxSWP: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "lshosts", "max_swp"),
+			"The total available swap space.  By default, the amount is displayed in KB. The amount can appear in MB depending on the actual system swap space. Use the LSF_UNIT_FOR_LIMITS parameter in the lsf.conf file to specify a larger unit for the limit (GB, TB, PB, or EB).",
+			[]string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
+		),
+		HostNCpus: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "lshosts", "ncpus_count"),
+			"The number of processors on this host. If the LSF_ENABLE_DUALCORE=Y parameter is specified in the lsf.conf file for multi-core CPU hosts, displays the number of cores instead of physical CPUs.",
+			[]string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
+		),
+		HostCpuf: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "lshosts", "cpuf"),
+			"The relative CPU performance factor. The CPU factor is used to scale the CPU load value so that differences in CPU speeds are considered. The faster the CPU, the larger the CPU factor.The default CPU factor of a host with an host type is 1.0. unknown",
+			[]string{"host_name", "host_type", "host_model", "server_type", "resource_type"}, nil,
+		),
+		logger: logger,
+	}, nil
 }
 
 // Update calls (*lmstatCollector).getLmStat to get the platform specific
 // memory metrics.
 func (c *lshostsCollector) Update(ch chan<- prometheus.Metric) error {
-    // err := c.getLmstatInfo(ch)
-    // if err != nil {
-    //  return fmt.Errorf("couldn't get lmstat version information: %w", err)
-    // }
+	// err := c.getLmstatInfo(ch)
+	// if err != nil {
+	//  return fmt.Errorf("couldn't get lmstat version information: %w", err)
+	// }
 
-    err := c.parselshostsCount(ch)
+	err := c.parselshostsCount(ch)
 
-    if err != nil {
-        return fmt.Errorf("couldn't get bhosts infomation: %w", err)
-    }
+	if err != nil {
+		return fmt.Errorf("couldn't get bhosts infomation: %w", err)
+	}
 
-    return nil
+	return nil
 }
 
 func lshosts_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]lshostsInfo, error) {
-    csv_out := csv.NewReader(TrimReader{bytes.NewReader(lsfOutput)})
-    csv_out.LazyQuotes = true
-    csv_out.Comma = ' '
-    csv_out.TrimLeadingSpace = true
-    csv_out.FieldsPerRecord = -1    // Allow different record length (resources)
+	csv_out := csv.NewReader(TrimReader{bytes.NewReader(lsfOutput)})
+	csv_out.LazyQuotes = true
+	csv_out.Comma = ' '
+	csv_out.TrimLeadingSpace = true
+	csv_out.FieldsPerRecord = -1 // Allow different record length (resources)
 
-    dec, err := csvutil.NewDecoder(csv_out)
-    if err != nil {
-        logger.Error("err=", "err", err)
-        return nil, nil
-    }
+	dec, err := csvutil.NewDecoder(csv_out)
+	if err != nil {
+		logger.Error("Error decoding CSV", "err", err)
+		return nil, nil
+	}
 
-    var lshostsInfos []lshostsInfo
+	var lshostsInfos []lshostsInfo
 
-    for {
-        var u lshostsInfo
+	for {
+		var u lshostsInfo
 
-        if err := dec.Decode(&u); err == io.EOF {
-            break
-//        } else if err == csvutil.ErrFieldCount {
-//            logger.Info("err=", "err", err)
-//            continue
-        } else if err != nil {
-            logger.Error("err=", "err", err)
-//            return nil, nil
-        }
+		if err := dec.Decode(&u); err == io.EOF {
+			break
+			//        } else if err == csvutil.ErrFieldCount {
+			//            logger.Info("err=", "err", err)
+			//            continue
+		} else if err != nil {
+			logger.Error("Error decoding record", "err", err)
+			//            return nil, nil
+		}
 
-        lshostsInfos = append(lshostsInfos, u)
-    }
-    return lshostsInfos, nil
+		lshostsInfos = append(lshostsInfos, u)
+	}
+	return lshostsInfos, nil
 
 }
 
 func FormatlshostsUnit(size float64, unit string) float64 {
-    //单位换算  KB，MB，GB, TB, PB, or EB -> KB
-    switch unit {
-    case "K":
-        return size
-    case "M":
-        return size * 1024
-    case "G":
-        return size * 1024 * 1024
-    case "T":
-        return size * 1024 * 1024 * 1024
-    case "P":
-        return size * 1024 * 1024 * 1024 * 1024
-    case "E":
-        return size * 1024 * 1024 * 1024 * 1024 * 1024
-    default:
-        return -1
-    }
+	//单位换算  KB，MB，GB, TB, PB, or EB -> KB
+	switch unit {
+	case "K":
+		return size
+	case "M":
+		return size * 1024
+	case "G":
+		return size * 1024 * 1024
+	case "T":
+		return size * 1024 * 1024 * 1024
+	case "P":
+		return size * 1024 * 1024 * 1024 * 1024
+	case "E":
+		return size * 1024 * 1024 * 1024 * 1024 * 1024
+	default:
+		return -1
+	}
 }
 
 // 转义服务器类型
 func ConvertServerType(server_type string) string {
-    switch strings.ToLower(server_type) {
-    case "yes":
-        return "servers"
-    case "no":
-        return "client"
-    case "dyn":
-        return "dynamic"
-    default:
-        return "unknown"
-    }
+	switch strings.ToLower(server_type) {
+	case "yes":
+		return "servers"
+	case "no":
+		return "client"
+	case "dyn":
+		return "dynamic"
+	default:
+		return "unknown"
+	}
 }
 
 // 去除字符串中的()
 func ConvertresourceType(resource_type string) string {
-    resource_type_1 := strings.ReplaceAll(resource_type, "(", "")
-    resource_type_new := strings.ReplaceAll(resource_type_1, ")", "")
-    return resource_type_new
+	resource_type_1 := strings.ReplaceAll(resource_type, "(", "")
+	resource_type_new := strings.ReplaceAll(resource_type_1, ")", "")
+	return resource_type_new
 }
 
 func (c *lshostsCollector) parselshostsCount(ch chan<- prometheus.Metric) error {
-//    output, err := lsfOutput(c.logger, "lshosts", "-w")
-    output, err := lsfOutput(c.logger, "lshosts", "-o", "HOST_NAME type model cpuf ncpus maxmem maxswp  server nprocs ncores nthreads RESOURCES" )
-    if err != nil {
-        c.logger.Error("err: ", "err", err)
-        return nil
-    }
-    lshosts, err := lshosts_CsvtoStruct(output, c.logger)
-    if err != nil {
-        c.logger.Error("err: ", "err", err)
-        return nil
-    }
+	//    output, err := lsfOutput(c.logger, "lshosts", "-w")
+	output, err := lsfOutput(c.logger, "lshosts", "-o", "HOST_NAME type model cpuf ncpus maxmem maxswp  server nprocs ncores nthreads RESOURCES")
+	if err != nil {
+		c.logger.Error("Failed to get lshosts output", "err", err)
+		return nil
+	}
+	lshosts, err := lshosts_CsvtoStruct(output, c.logger)
+	if err != nil {
+		c.logger.Error("Failed to parse lshosts output", "err", err)
+		return nil
+	}
 
-    for _, lshost := range lshosts {
+	for _, lshost := range lshosts {
 
-        Nprocs, err := strconv.ParseFloat(lshost.Nprocs, 64)
-				if err != nil {
-					Nprocs = -1
-				}
-				Ncores, err := strconv.ParseFloat(lshost.Ncores, 64)
-				if err != nil {
-					Ncores = -1
-				}
-				Nthreads, err := strconv.ParseFloat(lshost.Nthreads, 64)
-				if err != nil {
-					Nthreads = -1
-				}
-				Ncpus := Nprocs * Ncores * Nthreads
+		Nprocs, err := strconv.ParseFloat(lshost.Nprocs, 64)
+		if err != nil {
+			Nprocs = -1
+		}
+		Ncores, err := strconv.ParseFloat(lshost.Ncores, 64)
+		if err != nil {
+			Ncores = -1
+		}
+		Nthreads, err := strconv.ParseFloat(lshost.Nthreads, 64)
+		if err != nil {
+			Nthreads = -1
+		}
+		Ncpus := Nprocs * Ncores * Nthreads
 
-        Cpuf, err := strconv.ParseFloat(lshost.Cpuf, 64)
-        if err != nil {
-            Cpuf = -1
-        }
+		Cpuf, err := strconv.ParseFloat(lshost.Cpuf, 64)
+		if err != nil {
+			Cpuf = -1
+		}
 
-        var dataSize float64
-        var dataUnit string
+		var dataSize float64
+		var dataUnit string
 
-        fmt.Sscanf(lshost.Maxmem, "%f%s", &dataSize, &dataUnit)
-        ch <- prometheus.MustNewConstMetric(c.HostMaxMem, prometheus.GaugeValue, FormatlshostsUnit(dataSize, dataUnit), lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType(lshost.RESOURCES))
+		fmt.Sscanf(lshost.Maxmem, "%f%s", &dataSize, &dataUnit)
+		ch <- prometheus.MustNewConstMetric(c.HostMaxMem, prometheus.GaugeValue, FormatlshostsUnit(dataSize, dataUnit), lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType(lshost.RESOURCES))
 
-        fmt.Sscanf(lshost.Maxswp, "%f%s", &dataSize, &dataUnit)
-        ch <- prometheus.MustNewConstMetric(c.HostMaxSWP, prometheus.GaugeValue, FormatlshostsUnit(dataSize, dataUnit), lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType(lshost.RESOURCES))
+		fmt.Sscanf(lshost.Maxswp, "%f%s", &dataSize, &dataUnit)
+		ch <- prometheus.MustNewConstMetric(c.HostMaxSWP, prometheus.GaugeValue, FormatlshostsUnit(dataSize, dataUnit), lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType(lshost.RESOURCES))
 
-        ch <- prometheus.MustNewConstMetric(c.HostNCpus, prometheus.GaugeValue, Ncpus, lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType(lshost.RESOURCES))
-        ch <- prometheus.MustNewConstMetric(c.HostCpuf, prometheus.GaugeValue, Cpuf, lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType(lshost.RESOURCES))
+		ch <- prometheus.MustNewConstMetric(c.HostNCpus, prometheus.GaugeValue, Ncpus, lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType(lshost.RESOURCES))
+		ch <- prometheus.MustNewConstMetric(c.HostCpuf, prometheus.GaugeValue, Cpuf, lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType(lshost.RESOURCES))
 
-        //fmt.Sscanf(lshost.Maxmem, "%f%s", &dataSize, &dataUnit)
-        //ch <- prometheus.MustNewConstMetric(c.HostMaxMem, prometheus.GaugeValue, FormatlshostsUnit(dataSize, dataUnit), lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType("Dummy"))
+		//fmt.Sscanf(lshost.Maxmem, "%f%s", &dataSize, &dataUnit)
+		//ch <- prometheus.MustNewConstMetric(c.HostMaxMem, prometheus.GaugeValue, FormatlshostsUnit(dataSize, dataUnit), lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType("Dummy"))
 
-        //fmt.Sscanf(lshost.Maxswp, "%f%s", &dataSize, &dataUnit)
-        //ch <- prometheus.MustNewConstMetric(c.HostMaxSWP, prometheus.GaugeValue, FormatlshostsUnit(dataSize, dataUnit), lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType("Dummy"))
+		//fmt.Sscanf(lshost.Maxswp, "%f%s", &dataSize, &dataUnit)
+		//ch <- prometheus.MustNewConstMetric(c.HostMaxSWP, prometheus.GaugeValue, FormatlshostsUnit(dataSize, dataUnit), lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType("Dummy"))
 
-        //ch <- prometheus.MustNewConstMetric(c.HostNCpus, prometheus.GaugeValue, Ncpus, lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType("Dummy"))
-        //ch <- prometheus.MustNewConstMetric(c.HostCpuf, prometheus.GaugeValue, Cpuf, lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType("Dummy"))
+		//ch <- prometheus.MustNewConstMetric(c.HostNCpus, prometheus.GaugeValue, Ncpus, lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType("Dummy"))
+		//ch <- prometheus.MustNewConstMetric(c.HostCpuf, prometheus.GaugeValue, Cpuf, lshost.HOST_NAME, lshost.HOST_TYPE, lshost.Model, ConvertServerType(lshost.Server), ConvertresourceType("Dummy"))
 
+	}
 
-    }
-
-    return nil
+	return nil
 }

@@ -3,10 +3,10 @@ package collector
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"strings"
-	"log/slog"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -19,10 +19,10 @@ func GetSolverMapping(filePath string) map[string]string {
 		return solverMap
 	}
 
-		slog.Debug(fmt.Sprintf("GetSolverMapping: Attempting to open solver mapping file: %s", filePath))
+	slog.Debug("GetSolverMapping: Attempting to open solver mapping file", "path", filePath)
 	file, err := os.Open(filePath)
 	if err != nil {
-		slog.Error(fmt.Sprintf("GetSolverMapping: Failed to open solver mapping file %s: %q", filePath, err))
+		slog.Error("GetSolverMapping: Failed to open solver mapping file", "path", filePath, "err", err)
 		return solverMap
 	}
 	defer file.Close()
@@ -35,18 +35,19 @@ func GetSolverMapping(filePath string) map[string]string {
 			allowedKey := strings.ToLower(strings.TrimSpace(parts[0]))
 			solverLabel := strings.TrimSpace(parts[1])
 			solverMap[allowedKey] = solverLabel
-			slog.Debug(fmt.Sprintf("GetSolverMapping: Parsed mapping: raw_line='%s', key_part='%s', value_part='%s', allowedKey='%s', solverLabel='%s'", line, parts[0], parts[1], allowedKey, solverLabel))
+			slog.Debug("GetSolverMapping: Parsed mapping", "raw_line", line, "key_part", parts[0], "value_part", parts[1], "allowedKey", allowedKey, "solverLabel", solverLabel)
 		} else {
-			slog.Debug(fmt.Sprintf("GetSolverMapping: Skipping line (not 2 parts): raw_line='%s'", line))
+			slog.Debug("GetSolverMapping: Skipping line (not 2 parts)", "raw_line", line)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		slog.Error(fmt.Sprintf("GetSolverMapping: Error reading solver mapping file %s: %q", filePath, err))
+		slog.Error("GetSolverMapping: Error reading solver mapping file", "path", filePath, "err", err)
 	}
-	slog.Debug(fmt.Sprintf("GetSolverMapping: Loaded solver map: %+v", solverMap))
+	slog.Debug("GetSolverMapping: Loaded solver map", "map", solverMap)
 	return solverMap
 }
+
 type InformationCollector struct {
 	LsfInformation *prometheus.Desc
 	logger         *slog.Logger
@@ -119,7 +120,7 @@ func lsfOutput(logger *slog.Logger, exe_file string, args ...string) ([]byte, er
 func (c *InformationCollector) parsebLsfClusterInfo(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "lsid", "")
 	if err != nil {
-		c.logger.Error("err: ", "err", err)
+		c.logger.Error("Failed to get lsid output", "err", err)
 		return nil
 	}
 	lsf_summary := string(output)
@@ -148,9 +149,9 @@ func (c *InformationCollector) parsebLsfClusterInfo(ch chan<- prometheus.Metric)
 		}
 	}
 
-//	c.logger.Debug("当前集群名称：", "cluster_name", md["cluster_name"], ",当前的master节点名是:", "master_name", md["master_name"], ",版本是:", "lsf_version", md["lsf_version"])
-  c.logger.Debug("Current cluster info:",
-    "cluster_name", md["cluster_name"],
+	//	c.logger.Debug("当前集群名称：", "cluster_name", md["cluster_name"], ",当前的master节点名是:", "master_name", md["master_name"], ",版本是:", "lsf_version", md["lsf_version"])
+	c.logger.Debug("Current cluster info",
+		"cluster_name", md["cluster_name"],
 		"master_name", md["master_name"],
 		"lsf_version", md["lsf_version"])
 	ch <- prometheus.MustNewConstMetric(c.LsfInformation, prometheus.GaugeValue, 1.0, md["cluster_name"], md["master_name"], md["lsf_version"])

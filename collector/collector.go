@@ -17,9 +17,9 @@ package collector
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
-	"log/slog"
 
 	kingpin "github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
@@ -180,13 +180,11 @@ func execute(name string, c Collector, ch chan<- prometheus.Metric, logger *slog
 	err := c.Update(ch)
 	duration := time.Since(begin)
 	if err != nil {
-		logger.Error(name, "collector failed after:", duration.Seconds(), ":", err)
+		logger.Error("Collector failed", "name", name, "duration", duration.Seconds(), "err", err)
 
 		success = 0
 	} else {
-		logger.Debug("OK:",
-		  "name:", name,
-			"collector succeeded after:", duration.Seconds())
+		logger.Debug("Collector succeeded", "name", name, "duration", duration.Seconds())
 		success = 1
 	}
 	ch <- prometheus.MustNewConstMetric(scrapeDurationDesc, prometheus.GaugeValue, duration.Seconds(), name)

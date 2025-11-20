@@ -5,9 +5,9 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"log/slog"
 	"regexp"
 	"strings"
-	"log/slog"
 
 	"github.com/jszwec/csvutil"
 	"github.com/prometheus/client_golang/prometheus"
@@ -111,7 +111,7 @@ func bhost_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bhostInfo, erro
 
 	dec, err := csvutil.NewDecoder(csv_out)
 	if err != nil {
-		logger.Error("err=", "err", err)
+		logger.Error("Error decoding CSV", "err", err)
 		return nil, nil
 	}
 
@@ -122,7 +122,7 @@ func bhost_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bhostInfo, erro
 		if err := dec.Decode(&u); err == io.EOF {
 			break
 		} else if err != nil {
-			logger.Error("err=", "err", err)
+			logger.Error("Error decoding record", "err", err)
 			return nil, nil
 		}
 
@@ -134,9 +134,7 @@ func bhost_CsvtoStruct(lsfOutput []byte, logger *slog.Logger) ([]bhostInfo, erro
 
 func FormatbhostsStatus(status string, logger *slog.Logger) float64 {
 	state := strings.ToLower(status)
-	logger.Debug("The value currently obtained is: ",
-	  "status", status,
-		"state", state)
+	logger.Debug("Current value obtained", "status", status, "state", state)
 	switch state {
 	case "ok":
 		return float64(1)
@@ -144,7 +142,7 @@ func FormatbhostsStatus(status string, logger *slog.Logger) float64 {
 		return float64(2)
 	case "unreach":
 		return float64(3)
-	case "closed", "closed_excl", "closed_full" :
+	case "closed", "closed_excl", "closed_full":
 		return float64(4)
 	default:
 		return float64(0)
@@ -154,12 +152,12 @@ func FormatbhostsStatus(status string, logger *slog.Logger) float64 {
 func (c *bHostsCollector) parsebHostJobCount(ch chan<- prometheus.Metric) error {
 	output, err := lsfOutput(c.logger, "bhosts", "-w", "-X")
 	if err != nil {
-		c.logger.Error("err: ", "err", err)
+		c.logger.Error("Failed to get bhosts output", "err", err)
 		return nil
 	}
 	bhosts, err := bhost_CsvtoStruct(output, c.logger)
 	if err != nil {
-		c.logger.Error("err: ", "err", err)
+		c.logger.Error("Failed to parse bhosts output", "err", err)
 		return nil
 	}
 
