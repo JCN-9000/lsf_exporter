@@ -34,13 +34,15 @@ ansabatch_aws,Ansa
 ansa_pp,Ansa
 ansysem,Ansys
 autoform,Autoform
-bmstamp,BMstamp
+bmstamp,BMStamp
+bmstamp_qs,BMStamp
 carmaker_aws,CarMaker
 carmaker,CarMaker
 converge_aws,Converge
 converge,Converge
 converge_pp,Converge
 cotherm,Cotherm
+cotherm_qs,Cotherm
 designlife_aws,Designlife
 designlife,Designlife
 designlife_qs,Designlife
@@ -80,6 +82,8 @@ gtpower7,GTPower
 gtpower_aws,GTPower
 gtpower,GTPower
 gtsuite,GTPower
+gtoptserver,GTPower
+gtconverge,GTPower+Converge
 dyna_normal,LSDyna
 lsdyna_aws,LSDyna
 lsdyna_express,LSDyna
@@ -104,6 +108,7 @@ meshing,Meshing
 mesh_qs,Meshing
 meta,Meta
 moldflow,Moldflow
+montecarlo,MonteCarlo
 motionsolve,Motionsolve
 long_amls,Nastran
 long_n,Nastran
@@ -122,6 +127,7 @@ nastran_normal,Nastran
 nastran_qs,Nastran
 nastran_sol400_aws,Nastran
 nastran_sol400,Nastran
+navasto,Navasto
 ncode_aws,Ncode
 ncode,Ncode
 ncode_normal,Ncode
@@ -163,6 +169,7 @@ rgs,RGS
 saber_aws,Saber
 saber,Saber
 simdrive3d,Simdrive3D
+simdrive_qs,Simdrive3D
 singularity,Singularity
 speos,Speos
 ccmp,StarCCMP
